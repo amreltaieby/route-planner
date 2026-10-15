@@ -1,387 +1,386 @@
 "use client";
-import { Fragment, useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "../db";
-import CheckPick from "../CheckPick";
 
-let uid = 0;
-const nid = () => ++uid;
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const fmt = (ms) =>
-  new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-const fmtHM = (hm) => {
-  const [h, m] = hm.split(":");
-  const d = new Date();
-  d.setHours(+h, +m, 0, 0);
-  return fmt(d.getTime());
-};
-
-const fmtDur = (min) => {
-  const t = Math.round(min);
-  const h = Math.floor(t / 60);
-  const m = t % 60;
-  return h ? `${h} h ${m} min` : `${m} min`;
-};
+const CopyIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="9" y="9" width="13" height="13" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
 
 export default function Trips() {
   const [locs, setLocs] = useState([]);
-  const [clients, setClients] = useState([]);
   const [trips, setTrips] = useState([]);
+  const [clients, setClients] = useState([]);
   const [startId, setStartId] = useState("");
   const [endId, setEndId] = useState("");
-  const [stops, setStops] = useState(() => [{ id: nid(), locId: "", clients: [] }]);
-  const [stopMin, setStopMin] = useState(5);
-  const [traffic, setTraffic] = useState(1.3);
+  const [day, setDay] = useState("");
   const [arrival, setArrival] = useState("");
-  const [calc, setCalc] = useState(null);
-  const [calcErr, setCalcErr] = useState("");
-  const [calcBusy, setCalcBusy] = useState(false);
-  const [name, setName] = useState("");
-  const [msg, setMsg] = useState("");
+  const [stopMin, setStopMin] = useState("5");
+  const [tripName, setTripName] = useState("");
   const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function loadTrips() {
-    const { data } = await supabase
-      .from("trips")
-      .select("*")
-      .order("created_at", { ascending: false });
-    setTrips(data || []);
+  const [editId, setEditId] = useState(null);
+  const [ed, setEd] = useState({ startId: "", endId: "", arrival: "" });
+  const [listErr, setListErr] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  async function loadAll() {
+    const l = await supabase.from("locations").select("id,name,coords").order("name");
+    setLocs(l.data || []);
+    const t = await supabase.from("trips").select("id,name,data");
+    setTrips((t.data || []).filter((x) => x.data && x.data.day));
+    const c = await supabase.from("clients").select("id,name,stop,trips_by_day");
+    setClients(c.data || []);
   }
 
   useEffect(() => {
-    async function init() {
-      const l = await supabase.from("locations").select("id,name,coords").order("name");
-      setLocs(l.data || []);
-      const c = await supabase.from("clients").select("id,name,stop").order("name");
-      setClients(c.data || []);
-      loadTrips();
-    }
-    init();
+    loadAll();
   }, []);
 
-  const nn = (set) => (e) => {
-    const v = e.target.value;
-    set(Number(v) < 0 ? "0" : v);
-  };
-  const locOf = (id) => locs.find((l) => l.id === id);
-  const sLoc = locOf(startId);
-  const eLoc = locOf(endId);
-  const mids = stops
-    .map((s, i) => ({ i, s, l: locOf(s.locId) }))
-    .filter((x) => x.l);
-
-  const addStop = () =>
-    setStops((s) => [...s, { id: nid(), locId: "", clients: [] }]);
-  const setStopLoc = (i, v) =>
-    setStops((s) => s.map((x, j) => (j === i ? { ...x, locId: v, clients: [] } : x)));
-  const setStopClients = (i, v) =>
-    setStops((s) => s.map((x, j) => (j === i ? { ...x, clients: v } : x)));
-
-  const clientItems = (i) => {
-    const l = locOf(stops[i].locId);
-    if (!l) return [];
-    const taken = new Set(stops.filter((_, j) => j !== i).flatMap((s) => s.clients));
-    return clients
-      .filter((c) => c.stop === l.name && !taken.has(c.id))
-      .map((c) => ({ id: c.id, label: c.name }));
-  };
-
-  const sig = JSON.stringify([
-    startId,
-    endId,
-    stops.map((s) => s.locId),
-    arrival,
-    stopMin,
-    traffic,
-    locs.length,
-  ]);
-
-  useEffect(() => {
-    if (!sLoc || !eLoc || !mids.length || !arrival) {
-      setCalc(null);
-      setCalcErr("");
-      setCalcBusy(false);
-      return;
-    }
-    const sm = Math.max(0, Number(stopMin) || 0);
-    const [h, m] = arrival.split(":");
-    const when = new Date();
-    when.setHours(+h, +m, 0, 0);
-    const body = JSON.stringify({
-      stops: mids.map((x) => x.l.coords),
-      start: sLoc.coords,
-      end: eLoc.coords,
-      arrivalMs: when.getTime(),
-      stopMin: sm,
-      traffic,
-    });
-    const rowIdx = mids.map((x) => x.i);
-    let alive = true;
-    const t = setTimeout(async () => {
-      setCalcBusy(true);
-      setCalcErr("");
-      try {
-        const r = await fetch("/api/plan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-        });
-        const d = await r.json();
-        if (!alive) return;
-        if (d.error) {
-          setCalc(null);
-          setCalcErr(d.error);
-        } else setCalc({ ...d, rowIdx });
-      } catch (e) {
-        if (alive) setCalcErr(e.message);
-      }
-      if (alive) setCalcBusy(false);
-    }, 700);
-    return () => {
-      alive = false;
-      clearTimeout(t);
-    };
-  }, [sig]);
-
-  const info = {};
-  if (calc)
-    calc.order.forEach((p, k) => {
-      const key =
-        p.idx === 0
-          ? "start"
-          : p.idx === calc.rowIdx.length + 1
-          ? "end"
-          : "s" + calc.rowIdx[p.idx - 1];
-      info[key] = { no: k + 1, ...p };
-    });
-
-  async function save() {
-    setErr("");
-    setMsg("");
-    if (!name.trim()) return setErr("Enter a trip name.");
-    if (calcBusy) return setErr("Wait for the calculation to finish.");
-    if (!calc) return setErr("Complete the route first (start, end, a stop and arrival time).");
-    const data = {
-      start: { name: sLoc.name, loc: sLoc.coords },
-      end: { name: eLoc.name, loc: eLoc.coords },
-      stops: mids.map((x) => ({
-        name: x.l.name,
-        loc: x.l.coords,
-        clients: clients.filter((c) => x.s.clients.includes(c.id)).map((c) => c.name),
-      })),
-      arrival,
-      stopMin: Math.max(0, Number(stopMin) || 0),
-      traffic: Number(traffic) > 0 ? Number(traffic) : 1,
-    };
-    setSaving(true);
-    const { error } = await supabase.from("trips").insert({
-      name: name.trim(),
-      time_min: Math.round(calc.totalMin * 10) / 10,
-      distance_km: Math.round(calc.distanceKm * 10) / 10,
-      data,
-    });
-    setSaving(false);
-    if (error) return setErr(error.message);
-    setName("");
-    setMsg("Trip saved.");
-    loadTrips();
-  }
-
-  const locOptions = locs.map((l) => (
+  const opts = locs.map((l) => (
     <option key={l.id} value={l.id}>
       {l.name}
     </option>
   ));
 
+  const sorted = [...trips].sort(
+    (a, b) =>
+      DAYS.indexOf(a.data.day) - DAYS.indexOf(b.data.day) ||
+      (a.data.arrival || "99:99").localeCompare(b.data.arrival || "99:99") ||
+      a.name.localeCompare(b.name)
+  );
+
+  function enrolled(t) {
+    return clients.filter((c) => {
+      const v = c.trips_by_day;
+      const ids =
+        v && typeof v === "object" && !Array.isArray(v) && Array.isArray(v[t.data.day])
+          ? v[t.data.day]
+          : [];
+      return ids.includes(t.id);
+    });
+  }
+
+  function stopsOf(t) {
+    const out = [];
+    enrolled(t).forEach((c) => {
+      if (c.stop && !out.includes(c.stop)) out.push(c.stop);
+    });
+    return out;
+  }
+
+  function copy(t) {
+    const stops = [];
+    stopsOf(t).forEach((n) => {
+      const l = locs.find((x) => x.name === n);
+      if (l) stops.push({ name: l.name, loc: l.coords });
+    });
+    localStorage.setItem(
+      "abs_prefill",
+      JSON.stringify({
+        start: t.data.start,
+        end: t.data.end,
+        stops,
+        arrival: t.data.arrival || "",
+        stopMin: t.data.stopMin ?? 5,
+      })
+    );
+    window.location.href = "/?prefill=1";
+  }
+
+  function beginEdit(t) {
+    const byName = (x) => {
+      const l = locs.find((q) => q.name === (x && x.name));
+      return l ? l.id : "";
+    };
+    setListErr("");
+    setEditId(t.id);
+    setEd({
+      startId: byName(t.data.start),
+      endId: byName(t.data.end),
+      arrival: t.data.arrival || "",
+    });
+  }
+
+  async function saveEdit(t) {
+    setListErr("");
+    const s = locs.find((l) => l.id === ed.startId);
+    const e = locs.find((l) => l.id === ed.endId);
+    const data = {
+      ...t.data,
+      start: s ? { name: s.name, loc: s.coords } : t.data.start,
+      end: e ? { name: e.name, loc: e.coords } : t.data.end,
+      arrival: ed.arrival,
+    };
+    setEditSaving(true);
+    const res = await supabase.from("trips").update({ data }).eq("id", t.id).select();
+    setEditSaving(false);
+    if (res.error) return setListErr(res.error.message);
+    if (!res.data || !res.data.length)
+      return setListErr("Update was blocked. Run the Supabase update policy SQL first.");
+    setTrips((ts) => ts.map((x) => (x.id === t.id ? { ...x, data } : x)));
+    setEditId(null);
+  }
+
+  async function save() {
+    setErr("");
+    setMsg("");
+    const s = locs.find((l) => l.id === startId);
+    const e = locs.find((l) => l.id === endId);
+    if (!s || !e || !day) {
+      setErr("Fill start, end and day.");
+      return;
+    }
+    if (!tripName.trim()) {
+      setErr("Enter a trip name.");
+      return;
+    }
+    const sm = Number(stopMin) || 0;
+    if (sm < 0) {
+      setErr("Time per stop cannot be negative.");
+      return;
+    }
+    const data = {
+      start: { name: s.name, loc: s.coords },
+      end: { name: e.name, loc: e.coords },
+      day,
+      arrival,
+      stopMin: sm,
+    };
+    setSaving(true);
+    const { error } = await supabase
+      .from("trips")
+      .insert({ name: tripName.trim(), time_min: null, distance_km: null, data });
+    setSaving(false);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setStartId("");
+    setEndId("");
+    setDay("");
+    setArrival("");
+    setStopMin("5");
+    setTripName("");
+    setMsg("Trip saved.");
+    loadAll();
+  }
+
   return (
     <main className="rt wide">
       <h1>Trips</h1>
 
-      <div className="sec">Create new trip</div>
-      <div className="gwrap">
-        <div className="g4">
-          <div className="gh">Locations</div>
-          <div className="gh">Arrival time</div>
-          <div className="gh">Clients in stop</div>
-          <div className="gh">Trip link</div>
+      <div className="sec">Create trip</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Trip details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={{ verticalAlign: "top" }}>
+              <label>Start</label>
+              <select className="in" value={startId} onChange={(e) => setStartId(e.target.value)}>
+                <option value="">Select start</option>
+                {opts}
+              </select>
 
-          <select className="in" value={startId} onChange={(e) => setStartId(e.target.value)}>
-            <option value="">Start</option>
-            {locOptions}
-          </select>
-          <div className="muted">
-            {info.start ? (
-              <>
-                {info.start.no}. Depart <span className="acc">{fmt(info.start.departMs)}</span>
-              </>
-            ) : (
-              "-"
-            )}
-          </div>
-          <div />
-          <div>
-            {calc ? (
-              <a className="maps" href={calc.mapsUrl} target="_blank" rel="noreferrer">
-                Open trip in Google Maps
-              </a>
-            ) : (
-              <span className="muted">-</span>
-            )}
-          </div>
+              <label>End</label>
+              <select className="in" value={endId} onChange={(e) => setEndId(e.target.value)}>
+                <option value="">Select end</option>
+                {opts}
+              </select>
 
-          <select className="in" value={endId} onChange={(e) => setEndId(e.target.value)}>
-            <option value="">End</option>
-            {locOptions}
-          </select>
-          <input
-            className="in"
-            type="time"
-            value={arrival}
-            onChange={(e) => setArrival(e.target.value)}
-          />
-          <div />
-          <div />
+              <label>Day</label>
+              <select className="in" value={day} onChange={(e) => setDay(e.target.value)}>
+                <option value="">Select day</option>
+                {DAYS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
 
-          {stops.map((s, i) => {
-            const l = locOf(s.locId);
-            const inf = info["s" + i];
-            return (
-              <Fragment key={s.id}>
-                <select
-                  className="in"
-                  value={s.locId}
-                  onChange={(e) => setStopLoc(i, e.target.value)}
-                >
-                  <option value="">{`Stop ${i + 1}`}</option>
-                  {locOptions}
-                </select>
-                <div className="muted">
-                  {inf ? (
-                    <>
-                      {inf.no}. Arrive <span className="acc">{fmt(inf.arriveMs)}</span>
-                    </>
-                  ) : (
-                    "-"
-                  )}
-                </div>
-                <CheckPick
-                  label={
-                    l
-                      ? `Clients in ${l.name}: ${s.clients.length || "none"}`
-                      : "Clients in stop (select a stop)"
-                  }
-                  items={clientItems(i)}
-                  selected={s.clients}
-                  onChange={(v) => setStopClients(i, v)}
-                  disabled={!l}
-                />
-                <div />
-              </Fragment>
-            );
-          })}
+              <label>Arrival time (optional)</label>
+              <input
+                className="in"
+                type="time"
+                value={arrival}
+                onChange={(e) => setArrival(e.target.value)}
+              />
 
-          <div>
-            <label className="gl">Stopped time per stop (min)</label>
-            <input
-              className="in"
-              type="number"
-              min="0"
-              value={stopMin}
-              onChange={nn(setStopMin)}
-            />
-          </div>
-          <div />
-          <div />
-          <div />
+              <label>Time per stop (min)</label>
+              <input
+                className="in"
+                type="number"
+                min="0"
+                value={stopMin}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setStopMin(Number(v) < 0 ? "0" : v);
+                }}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
-          <div>
-            <label className="gl">Traffic factor</label>
-            <input
-              className="in"
-              type="number"
-              step="0.05"
-              min="0"
-              value={traffic}
-              onChange={nn(setTraffic)}
-            />
-          </div>
-          <div />
-          <div />
-          <div />
-
-          <div>
-            <button className="ghost" onClick={addStop}>
-              + Add stop
-            </button>
-          </div>
-          <div />
-          <div />
-          <div />
-        </div>
-      </div>
-
-      {calcBusy && <p className="muted">Calculating...</p>}
-      {calcErr && <p className="err">{calcErr}</p>}
-
-      <div className="row" style={{ marginTop: 18 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        {msg && <span className="muted">{msg}</span>}
         <input
-          className="in nm"
+          className="in"
+          style={{ maxWidth: 260 }}
           placeholder="Trip name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={tripName}
+          onChange={(e) => setTripName(e.target.value)}
         />
         <button className="btn" style={{ marginTop: 0 }} onClick={save} disabled={saving}>
           {saving ? "Saving..." : "Save"}
         </button>
       </div>
       {err && <p className="err">{err}</p>}
-      {msg && <p className="muted">{msg}</p>}
 
-      <div className="sec">Saved trips</div>
-      <div className="gwrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Trip name</th>
-              <th>Route</th>
-              <th>Arrival time</th>
-              <th>Distance</th>
-              <th>Time</th>
-              <th>Clients</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trips.map((t) => {
-              const d = t.data || {};
-              const route = d.start
-                ? [d.start.name, ...(d.stops || []).map((s) => s.name), d.end && d.end.name].join(" → ")
-                : "-";
-              const cl =
-                (d.stops || [])
-                  .filter((s) => s.clients && s.clients.length)
-                  .map((s) => `${s.name}: ${s.clients.join(", ")}`)
-                  .join(" | ") || "-";
-              return (
-                <tr key={t.id}>
-                  <td>
-                    <Link className="maps" href={`/?trip=${t.id}`}>
-                      {t.name}
-                    </Link>
-                  </td>
-                  <td>{route}</td>
-                  <td>{d.arrival ? fmtHM(d.arrival) : "-"}</td>
-                  <td>{t.distance_km != null ? `${Number(t.distance_km).toFixed(1)} km` : "-"}</td>
-                  <td>{t.time_min != null ? fmtDur(Number(t.time_min)) : "-"}</td>
-                  <td>{cl}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="sec" style={{ marginTop: 36 }}>
+        Trips
       </div>
-      {trips.length === 0 && <div className="empty">No saved trips yet.</div>}
+      <table>
+        <thead>
+          <tr>
+            <th>Trip day</th>
+            <th>Trip name</th>
+            <th>Start location</th>
+            <th>Stops</th>
+            <th>Clients</th>
+            <th>End location</th>
+            <th>Arrival time</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((t) => {
+            const st = stopsOf(t);
+            const cl = enrolled(t);
+            const editing = editId === t.id;
+            return (
+              <tr key={t.id}>
+                <td>{t.data.day}</td>
+                <td>{t.name}</td>
+                <td>
+                  {editing ? (
+                    <select
+                      className="in"
+                      value={ed.startId}
+                      onChange={(e) => setEd({ ...ed, startId: e.target.value })}
+                    >
+                      <option value="">{(t.data.start && t.data.start.name) || "Select start"}</option>
+                      {opts}
+                    </select>
+                  ) : (
+                    (t.data.start && t.data.start.name) || "-"
+                  )}
+                </td>
+                <td>
+                  {st.length === 0 ? "-" : st.map((n) => <div key={n}>{n}</div>)}
+                </td>
+                <td>
+                  {cl.length === 0 ? "-" : cl.map((c) => <div key={c.id}>{c.name}</div>)}
+                </td>
+                <td>
+                  {editing ? (
+                    <select
+                      className="in"
+                      value={ed.endId}
+                      onChange={(e) => setEd({ ...ed, endId: e.target.value })}
+                    >
+                      <option value="">{(t.data.end && t.data.end.name) || "Select end"}</option>
+                      {opts}
+                    </select>
+                  ) : (
+                    (t.data.end && t.data.end.name) || "-"
+                  )}
+                </td>
+                <td>
+                  {editing ? (
+                    <input
+                      className="in"
+                      type="time"
+                      value={ed.arrival}
+                      onChange={(e) => setEd({ ...ed, arrival: e.target.value })}
+                    />
+                  ) : (
+                    t.data.arrival || "-"
+                  )}
+                </td>
+                <td>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {editing ? (
+                      <>
+                        <button
+                          className="btn"
+                          style={{ marginTop: 0 }}
+                          onClick={() => saveEdit(t)}
+                          disabled={editSaving}
+                        >
+                          {editSaving ? "Saving..." : "Save"}
+                        </button>
+                        <button className="ghost" onClick={() => setEditId(null)}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className="ghost"
+                          title="Copy to homepage"
+                          aria-label="Copy to homepage"
+                          onClick={() => copy(t)}
+                        >
+                          <CopyIcon />
+                        </button>
+                        <button
+                          className="ghost"
+                          title="Edit trip"
+                          aria-label="Edit trip"
+                          onClick={() => beginEdit(t)}
+                        >
+                          {"\u22EE"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {sorted.length === 0 && <div className="empty">No trips yet.</div>}
+      {listErr && <p className="err">{listErr}</p>}
     </main>
   );
 }

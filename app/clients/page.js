@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../db";
 import CheckPick from "../CheckPick";
 
@@ -10,10 +10,12 @@ const toArr = (s) =>
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
+const arr = (x) => (Array.isArray(x) ? x : []);
 
 export default function Clients() {
   const [rows, setRows] = useState([]);
   const [locs, setLocs] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [edits, setEdits] = useState({});
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
@@ -32,6 +34,8 @@ export default function Clients() {
     async function init() {
       const l = await supabase.from("locations").select("id,name").order("name");
       setLocs(l.data || []);
+      const t = await supabase.from("trips").select("id,name,data").order("name");
+      setTrips((t.data || []).filter((x) => x.data && x.data.day));
       load();
     }
     init();
@@ -43,6 +47,15 @@ export default function Clients() {
     setMsg("");
     setEdits((e) => ({ ...e, [id]: { ...e[id], [f]: v } }));
   };
+  const tbd = (r) => {
+    const v =
+      edits[r.id] && "trips_by_day" in edits[r.id]
+        ? edits[r.id].trips_by_day
+        : r.trips_by_day;
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  };
+  const tripItems = (d) =>
+    trips.filter((t) => t.data.day === d).map((t) => ({ id: t.id, label: t.name }));
   const pending = Object.keys(edits).length;
 
   async function save() {
@@ -77,7 +90,29 @@ export default function Clients() {
     <main className="rt wide">
       <h1>Clients</h1>
 
-      <div className="sec">Current clients</div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <div className="sec">Current clients</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {msg && <span className="muted">{msg}</span>}
+          <button
+            className="btn"
+            style={{ marginTop: 0 }}
+            onClick={save}
+            disabled={saving || pending === 0}
+          >
+            {saving ? "Saving..." : "Save changes"}
+          </button>
+        </div>
+      </div>
+      {err && <p className="err">{err}</p>}
+
       <table>
         <thead>
           <tr>
@@ -85,80 +120,106 @@ export default function Clients() {
             <th>Their stop</th>
             <th>Days</th>
             <th>Details</th>
-            <th>End location</th>
             <th>ID</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
             const sel = DAYS.filter((d) => toArr(val(r, "days")).includes(d));
+            const tb = tbd(r);
+            const hasTrips = sel.length > 0;
+            const nb = hasTrips ? { borderBottom: "none" } : undefined;
             return (
-              <tr key={r.id}>
-                <td>{r.name}</td>
-                <td>
-                  <select
-                    className="in"
-                    value={val(r, "stop")}
-                    onChange={(e) => setField(r.id, "stop", e.target.value)}
-                  >
-                    <option value="">Select stop</option>
-                    {locOpts}
-                  </select>
-                </td>
-                <td>
-                  <CheckPick
-                    label={sel.length ? sel.map((d) => d.slice(0, 3)).join(", ") : "Select days"}
-                    items={dayItems}
-                    selected={sel}
-                    onChange={(v) =>
-                      setField(r.id, "days", DAYS.filter((d) => v.includes(d)).join(", "))
-                    }
-                  />
-                </td>
-                <td>
-                  <div className="muted">Phone: {r.phone || "-"}</div>
-                  <div className="muted">Parent phone: {r.parent_phone || "-"}</div>
-                  <div className="muted">Start: {r.start_request || "-"}</div>
-                  <div className="muted">Drop off: {r.dropoff_request || "-"}</div>
-                </td>
-                <td>
-                  <select
-                    className="in"
-                    value={val(r, "end_loc")}
-                    onChange={(e) => setField(r.id, "end_loc", e.target.value)}
-                  >
-                    <option value="">Assign end location</option>
-                    {locOpts}
-                  </select>
-                </td>
-                <td>{r.client_no ?? "-"}</td>
-              </tr>
+              <Fragment key={r.id}>
+                <tr style={nb}>
+                  <td style={nb}>{r.name}</td>
+                  <td style={nb}>
+                    <select
+                      className="in"
+                      value={val(r, "stop")}
+                      onChange={(e) => setField(r.id, "stop", e.target.value)}
+                    >
+                      <option value="">Select stop</option>
+                      {locOpts}
+                    </select>
+                  </td>
+                  <td style={nb}>
+                    <CheckPick
+                      label={sel.length ? sel.map((d) => d.slice(0, 3)).join(", ") : "Select days"}
+                      items={dayItems}
+                      selected={sel}
+                      onChange={(v) => {
+                        const nextDays = DAYS.filter((d) => v.includes(d));
+                        setField(r.id, "days", nextDays.join(", "));
+                        const kept = {};
+                        nextDays.forEach((d) => {
+                          if (arr(tb[d]).length) kept[d] = arr(tb[d]);
+                        });
+                        setField(r.id, "trips_by_day", kept);
+                      }}
+                    />
+                  </td>
+                  <td style={nb}>
+                    <div className="muted">Phone: {r.phone || "-"}</div>
+                    <div className="muted">Parent phone: {r.parent_phone || "-"}</div>
+                    <div className="muted">Start: {r.start_request || "-"}</div>
+                    <div className="muted">Drop off: {r.dropoff_request || "-"}</div>
+                  </td>
+                  <td style={nb}>{r.client_no ?? "-"}</td>
+                </tr>
+                {hasTrips && (
+                  <tr>
+                    <td colSpan={5} style={{ paddingTop: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          rowGap: 8,
+                        }}
+                      >
+                        {sel.map((d, i) => {
+                          const items = tripItems(d);
+                          const chosen = arr(tb[d]);
+                          const names = items
+                            .filter((x) => chosen.includes(x.id))
+                            .map((x) => x.label);
+                          return (
+                            <div
+                              key={d}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                marginRight: 16,
+                                paddingLeft: i ? 16 : 0,
+                                borderLeft: i ? "1px solid #3a3a38" : "none",
+                              }}
+                            >
+                              <span className="muted">{d}</span>
+                              <CheckPick
+                                label={names.length ? names.join(", ") : "Select trips"}
+                                items={items}
+                                selected={chosen}
+                                onChange={(v) => {
+                                  const next = { ...tb, [d]: v };
+                                  if (!v.length) delete next[d];
+                                  setField(r.id, "trips_by_day", next);
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             );
           })}
         </tbody>
       </table>
       {rows.length === 0 && <div className="empty">No clients yet.</div>}
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        {msg && <span className="muted">{msg}</span>}
-        <button
-          className="btn"
-          style={{ marginTop: 0 }}
-          onClick={save}
-          disabled={saving || pending === 0}
-        >
-          {saving ? "Saving..." : "Save changes"}
-        </button>
-      </div>
-      {err && <p className="err">{err}</p>}
     </main>
   );
 }

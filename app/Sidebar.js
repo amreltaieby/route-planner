@@ -8,10 +8,11 @@ const links = [
   { href: "/locations", label: "Locations" },
   { href: "/clients", label: "Clients" },
   { href: "/trips", label: "Trips" },
-  { href: "/schedule", label: "Schedule" },
+  { href: "/schedule", label: "Client lists" },
+  { href: "/settings", label: "Settings" },
 ];
 
-const publicPaths = ["/signup", "/client"];
+const publicPaths = ["/signup", "/client", "/terms"];
 
 export default function Sidebar({ children }) {
   const [open, setOpen] = useState(true);
@@ -23,10 +24,10 @@ export default function Sidebar({ children }) {
       <aside className={open ? "side" : "side closed"}>
         <div className="top">
           <Link href="/" className="brand">
-            ABS
+            Routiq
           </Link>
           <button className="tg" onClick={() => setOpen(!open)} aria-label="Toggle menu">
-            {open ? "«" : "☰"}
+            {open ? "\u00AB" : "\u2630"}
           </button>
         </div>
         <nav>
