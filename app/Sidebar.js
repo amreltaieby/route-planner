@@ -7,12 +7,13 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/locations", label: "Locations" },
   { href: "/clients", label: "Clients" },
+  { href: "/requests", label: "Client requests" },
   { href: "/trips", label: "Trips" },
   { href: "/schedule", label: "Client lists" },
   { href: "/settings", label: "Settings" },
 ];
 
-const publicPaths = ["/signup", "/client", "/terms"];
+const publicPaths = ["/signup", "/login", "/join", "/client", "/terms"];
 
 export default function Sidebar({ children }) {
   const [open, setOpen] = useState(true);

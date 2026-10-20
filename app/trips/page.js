@@ -1,30 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "../db";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const CopyIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <rect x="9" y="9" width="13" height="13" rx="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-
 export default function Trips() {
   const [locs, setLocs] = useState([]);
   const [trips, setTrips] = useState([]);
-  const [clients, setClients] = useState([]);
   const [startId, setStartId] = useState("");
   const [endId, setEndId] = useState("");
   const [day, setDay] = useState("");
@@ -41,12 +24,12 @@ export default function Trips() {
   const [editSaving, setEditSaving] = useState(false);
 
   async function loadAll() {
-    const l = await supabase.from("locations").select("id,name,coords").order("name");
+    const [l, t] = await Promise.all([
+      supabase.from("locations").select("id,name,coords").order("name"),
+      supabase.from("trips").select("id,name,data"),
+    ]);
     setLocs(l.data || []);
-    const t = await supabase.from("trips").select("id,name,data");
     setTrips((t.data || []).filter((x) => x.data && x.data.day));
-    const c = await supabase.from("clients").select("id,name,stop,trips_by_day");
-    setClients(c.data || []);
   }
 
   useEffect(() => {
@@ -65,44 +48,6 @@ export default function Trips() {
       (a.data.arrival || "99:99").localeCompare(b.data.arrival || "99:99") ||
       a.name.localeCompare(b.name)
   );
-
-  function enrolled(t) {
-    return clients.filter((c) => {
-      const v = c.trips_by_day;
-      const ids =
-        v && typeof v === "object" && !Array.isArray(v) && Array.isArray(v[t.data.day])
-          ? v[t.data.day]
-          : [];
-      return ids.includes(t.id);
-    });
-  }
-
-  function stopsOf(t) {
-    const out = [];
-    enrolled(t).forEach((c) => {
-      if (c.stop && !out.includes(c.stop)) out.push(c.stop);
-    });
-    return out;
-  }
-
-  function copy(t) {
-    const stops = [];
-    stopsOf(t).forEach((n) => {
-      const l = locs.find((x) => x.name === n);
-      if (l) stops.push({ name: l.name, loc: l.coords });
-    });
-    localStorage.setItem(
-      "abs_prefill",
-      JSON.stringify({
-        start: t.data.start,
-        end: t.data.end,
-        stops,
-        arrival: t.data.arrival || "",
-        stopMin: t.data.stopMin ?? 5,
-      })
-    );
-    window.location.href = "/?prefill=1";
-  }
 
   function beginEdit(t) {
     const byName = (x) => {
@@ -133,7 +78,7 @@ export default function Trips() {
     setEditSaving(false);
     if (res.error) return setListErr(res.error.message);
     if (!res.data || !res.data.length)
-      return setListErr("Update was blocked. Run the Supabase update policy SQL first.");
+      return setListErr("Update was blocked. Check the Supabase policies.");
     setTrips((ts) => ts.map((x) => (x.id === t.id ? { ...x, data } : x)));
     setEditId(null);
   }
@@ -274,8 +219,6 @@ export default function Trips() {
             <th>Trip day</th>
             <th>Trip name</th>
             <th>Start location</th>
-            <th>Stops</th>
-            <th>Clients</th>
             <th>End location</th>
             <th>Arrival time</th>
             <th></th>
@@ -283,13 +226,15 @@ export default function Trips() {
         </thead>
         <tbody>
           {sorted.map((t) => {
-            const st = stopsOf(t);
-            const cl = enrolled(t);
             const editing = editId === t.id;
             return (
               <tr key={t.id}>
                 <td>{t.data.day}</td>
-                <td>{t.name}</td>
+                <td>
+                  <Link className="maps" href={"/trips/" + t.id}>
+                    {t.name}
+                  </Link>
+                </td>
                 <td>
                   {editing ? (
                     <select
@@ -303,12 +248,6 @@ export default function Trips() {
                   ) : (
                     (t.data.start && t.data.start.name) || "-"
                   )}
-                </td>
-                <td>
-                  {st.length === 0 ? "-" : st.map((n) => <div key={n}>{n}</div>)}
-                </td>
-                <td>
-                  {cl.length === 0 ? "-" : cl.map((c) => <div key={c.id}>{c.name}</div>)}
                 </td>
                 <td>
                   {editing ? (
@@ -353,24 +292,14 @@ export default function Trips() {
                         </button>
                       </>
                     ) : (
-                      <>
-                        <button
-                          className="ghost"
-                          title="Copy to homepage"
-                          aria-label="Copy to homepage"
-                          onClick={() => copy(t)}
-                        >
-                          <CopyIcon />
-                        </button>
-                        <button
-                          className="ghost"
-                          title="Edit trip"
-                          aria-label="Edit trip"
-                          onClick={() => beginEdit(t)}
-                        >
-                          {"\u22EE"}
-                        </button>
-                      </>
+                      <button
+                        className="ghost"
+                        title="Edit trip"
+                        aria-label="Edit trip"
+                        onClick={() => beginEdit(t)}
+                      >
+                        {"\u22EE"}
+                      </button>
                     )}
                   </div>
                 </td>

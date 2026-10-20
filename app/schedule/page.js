@@ -2,16 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../db";
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const toArr = (s) =>
   (s || "")
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
-const top = (arr) => {
+const arr = (x) => (Array.isArray(x) ? x : []);
+const tbObj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+const top = (list) => {
   const c = {};
-  arr.forEach((x) => {
+  list.forEach((x) => {
     if (x) c[x] = (c[x] || 0) + 1;
   });
   return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || "";
@@ -20,29 +21,27 @@ const top = (arr) => {
 export default function ClientLists() {
   const [locs, setLocs] = useState([]);
   const [clients, setClients] = useState([]);
-  const [pend, setPend] = useState({});
-  const [openDay, setOpenDay] = useState(null);
+  const [trips, setTrips] = useState([]);
   const [routes, setRoutes] = useState({});
   const [today, setToday] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [err, setErr] = useState("");
-  const [msg, setMsg] = useState("");
-  const [saving, setSaving] = useState(false);
   const cache = useRef({});
-
-  async function loadClients() {
-    const c = await supabase
-      .from("clients")
-      .select("id,name,stop,days,end_loc,trips_by_day");
-    if (c.error) setErr(c.error.message);
-    setClients(c.data || []);
-  }
 
   useEffect(() => {
     async function init() {
-      const l = await supabase.from("locations").select("id,name,coords");
+      const [l, t, c] = await Promise.all([
+        supabase.from("locations").select("id,name,coords"),
+        supabase.from("trips").select("id,name,data"),
+        supabase
+          .from("clients")
+          .select("id,name,stop,days,end_loc,trips_by_day")
+          .eq("status", "approved"),
+      ]);
+      if (c.error) setErr(c.error.message);
       setLocs(l.data || []);
-      await loadClients();
+      setTrips((t.data || []).filter((x) => x.data && x.data.day));
+      setClients(c.data || []);
       setToday(new Date());
       setLoaded(true);
     }
@@ -51,21 +50,26 @@ export default function ClientLists() {
 
   const locOf = (n) => locs.find((l) => l.name === n);
 
-  const eff = clients.map((c) => ({
-    ...c,
-    days: pend[c.id] !== undefined ? pend[c.id] : c.days,
-  }));
-  const sortedClients = [...eff].sort((a, b) => a.name.localeCompare(b.name));
-
   const days =
     loaded && today
       ? Array.from({ length: 7 }, (_, i) => {
           const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
           const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
-          const cl = eff.filter((c) => c.stop && toArr(c.days).includes(dayName));
-          const endName = top(cl.map((c) => c.end_loc));
-          const groups = {};
+          const cl = clients.filter((c) => toArr(c.days).includes(dayName));
+          const withStop = cl.filter((c) => c.stop);
+          const noStop = cl.filter((c) => !c.stop).map((c) => c.name);
+
+          const joinedEnds = [];
           cl.forEach((c) => {
+            arr(tbObj(c.trips_by_day)[dayName]).forEach((id) => {
+              const t = trips.find((x) => x.id === id);
+              if (t && t.data.end && t.data.end.name) joinedEnds.push(t.data.end.name);
+            });
+          });
+          const endName = top(joinedEnds) || top(cl.map((c) => c.end_loc));
+
+          const groups = {};
+          withStop.forEach((c) => {
             (groups[c.stop] = groups[c.stop] || []).push(c.name);
           });
           const eLoc = locOf(endName);
@@ -76,7 +80,7 @@ export default function ClientLists() {
             eLoc && mids.length
               ? JSON.stringify([eLoc.coords, mids.map((n) => [n, locOf(n).coords])])
               : "";
-          return { dayName, cl, endName, groups, eLoc, mids, sig };
+          return { dayName, cl, noStop, withStop, endName, groups, eLoc, mids, sig };
         })
       : [];
 
@@ -122,141 +126,41 @@ export default function ClientLists() {
     };
   }, [dkey]);
 
-  function toggle(c, dayName) {
-    setMsg("");
-    const cur = toArr(c.days);
-    const next = cur.includes(dayName)
-      ? cur.filter((x) => x !== dayName)
-      : [...cur, dayName];
-    const str = DAYS.filter((x) => next.includes(x)).join(", ");
-    setPend((p) => ({ ...p, [c.id]: str }));
-  }
-
-  async function save() {
-    setErr("");
-    setMsg("");
-    const ids = Object.keys(pend);
-    if (!ids.length) return;
-    setSaving(true);
-    const results = await Promise.all(
-      ids.map((id) => {
-        const c = clients.find((x) => String(x.id) === id);
-        const keep = toArr(pend[id]);
-        const v =
-          c && c.trips_by_day && typeof c.trips_by_day === "object" && !Array.isArray(c.trips_by_day)
-            ? c.trips_by_day
-            : {};
-        const tb = {};
-        Object.keys(v).forEach((k) => {
-          if (keep.includes(k)) tb[k] = v[k];
-        });
-        return supabase
-          .from("clients")
-          .update({ days: pend[id] || null, trips_by_day: tb })
-          .eq("id", id);
-      })
-    );
-    setSaving(false);
-    const bad = results.find((r) => r.error);
-    if (bad) {
-      setErr(bad.error.message);
-      return;
-    }
-    await loadClients();
-    setPend({});
-    setMsg("Changes saved.");
-  }
-
   function rowsFor(d, midOrder) {
     const names = [...midOrder];
+    Object.keys(d.groups)
+      .filter((n) => n !== d.endName && !names.includes(n))
+      .sort()
+      .forEach((n) => names.push(n));
     if (d.groups[d.endName]) names.push(d.endName);
     return names.map((n) => ({ name: n, clients: d.groups[n] }));
   }
 
-  const pending = Object.keys(pend).length;
-
   return (
     <main className="rt">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <h1>Client lists</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {msg && <span className="muted">{msg}</span>}
-          <button
-            className="btn"
-            style={{ marginTop: 0 }}
-            onClick={save}
-            disabled={saving || pending === 0}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
+      <h1>Client lists</h1>
       {err && <p className="err">{err}</p>}
 
       {days.map((d) => {
         let rows = null;
         let note = "";
+        let info = "";
         if (!d.cl.length) note = "No clients scheduled.";
-        else if (!d.eLoc)
-          note = "Assign an end location to these clients on the Clients page.";
-        else if (d.sig) {
+        else if (!d.withStop.length) note = "These clients have no stop set.";
+        else if (d.eLoc && d.sig) {
           const rt = routes[d.sig];
           if (!rt || rt.pending) note = "Calculating route...";
           else if (rt.error) note = rt.error;
           else rows = rowsFor(d, rt.order);
-        } else rows = rowsFor(d, []);
+        } else if (d.eLoc) rows = rowsFor(d, []);
+        else {
+          rows = rowsFor(d, []);
+          info = "No end location found for this day, so the stop order is not optimized.";
+        }
 
         return (
           <section className="card" key={d.dayName}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-              <h3 style={{ margin: 0, fontSize: 17 }}>{d.dayName}</h3>
-              <div style={{ position: "relative" }}>
-                <button
-                  className="ghost"
-                  style={{ marginTop: 0 }}
-                  onClick={() => setOpenDay(openDay === d.dayName ? null : d.dayName)}
-                >
-                  Edit
-                </button>
-                {openDay === d.dayName && (
-                  <>
-                    <div className="mo" onClick={() => setOpenDay(null)} />
-                    <div className="mlist">
-                      {sortedClients.length === 0 && (
-                        <div className="mi muted">No clients</div>
-                      )}
-                      {sortedClients.map((c) => (
-                        <label
-                          key={c.id}
-                          className="mi"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={toArr(c.days).includes(d.dayName)}
-                            onChange={() => toggle(c, d.dayName)}
-                          />
-                          <span>{c.name}</span>
-                          {!c.stop && <span className="muted">(no stop)</span>}
-                        </label>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 17 }}>{d.dayName}</h3>
 
             {rows ? (
               <table>
@@ -279,6 +183,16 @@ export default function ClientLists() {
               </table>
             ) : (
               <div className="muted">{note}</div>
+            )}
+            {info && (
+              <div className="muted" style={{ marginTop: 8 }}>
+                {info}
+              </div>
+            )}
+            {d.noStop.length > 0 && (
+              <div className="muted" style={{ marginTop: 8 }}>
+                No stop set: {d.noStop.join(", ")}
+              </div>
             )}
           </section>
         );

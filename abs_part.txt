@@ -1,0 +1,357 @@
+===== app\app.css ===== 
+body{background:#262624;margin:0}
+.shell{display:flex;min-height:100vh}
+.side{width:220px;flex-shrink:0;background:#1f1e1d;border-right:1px solid #3d3d3a;padding:14px;transition:width .2s;overflow:hidden}
+.side.closed{width:56px;padding:14px 8px}
+.side .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side.closed .top{justify-content:center}
+.side .brand{flex:1;text-align:center;color:#58a6ff;font-weight:800;font-size:28px;letter-spacing:2px;text-decoration:none;white-space:nowrap}
+.side.closed .brand,.side.closed nav{display:none}
+.side .tg{background:transparent;border:1px solid #3d3d3a;color:#faf9f5;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;flex-shrink:0}
+.side .tg:hover{border-color:#22d3ee}
+.side nav{display:flex;flex-direction:column;gap:6px;margin-top:20px}
+.side nav a{color:#c2c0b6;text-decoration:none;padding:10px 12px;border-radius:8px;font-size:15px;white-space:nowrap}
+.side nav a:hover{background:#30302e;color:#faf9f5}
+.side nav a.on{background:#30302e;color:#22d3ee}
+.main{flex:1;min-width:0}
+
+.rt,.rt *{box-sizing:border-box}
+.rt{color:#faf9f5;font-family:system-ui,sans-serif;max-width:720px;margin:0 auto;padding:20px}
+.rt.wide{max-width:1100px}
+.rt h1{margin:0 0 4px}
+.rt .brandh{text-align:center;color:#58a6ff;font-size:46px;font-weight:800;letter-spacing:2px;margin:0 0 12px}
+.rt label{display:block;color:#c2c0b6;font-size:13px;margin:18px 0 6px}
+.rt label.gl{margin:0 0 6px}
+.rt .in{background:#1f1e1d;border:1px solid #3d3d3a;color:#faf9f5;padding:10px;border-radius:8px;font-size:14px;width:100%;color-scheme:dark;font-family:inherit}
+.rt .in:focus{outline:none;border-color:#22d3ee}
+.rt .row{display:flex;gap:8px;margin-bottom:8px}
+.rt .nm{flex:1 1 0;min-width:0}
+.rt .lc{flex:2 1 0;min-width:0}
+.rt .eq{flex:1 1 0;min-width:0}
+.rt .btn{background:#22d3ee;color:#1f1e1d;border:0;border-radius:8px;padding:10px 22px;font-weight:600;font-size:14px;cursor:pointer;margin-top:22px}
+.rt .btn:disabled{opacity:.6;cursor:default}
+.rt .ghost{background:transparent;color:#22d3ee;border:1px solid #22d3ee;border-radius:8px;padding:8px 14px;font-size:14px;cursor:pointer;margin-top:4px}
+.rt .card{background:#30302e;border:1px solid #3d3d3a;border-radius:12px;padding:20px;margin-top:28px}
+.rt .muted{color:#c2c0b6;font-size:14px}
+.rt .acc{color:#22d3ee}
+.rt a.maps{color:#58a6ff;text-decoration:underline}
+.rt .err{color:#f87171}
+
+.rt .gap{margin:6px 0 10px 8px}
+.rt .dots{color:#c2c0b6;font-size:22px;line-height:1;display:inline-block;margin-right:10px;vertical-align:middle}
+.rt a.view{color:#58a6ff;text-decoration:underline;font-size:14px;vertical-align:middle}
+.rt .gbox{display:flex;gap:12px;margin:8px 0 4px;flex-wrap:wrap}
+.rt .gfield{display:flex;flex-direction:column;gap:4px}
+.rt .gin{width:190px}
+
+.rt .hb{position:relative;flex:none}
+.rt .pk{position:relative}
+.rt .pk.eq{flex:1 1 0;min-width:0}
+.rt .mn{background:#1f1e1d;border:1px solid #3d3d3a;color:#faf9f5;border-radius:8px;width:40px;height:100%;cursor:pointer;font-size:16px}
+.rt .mn:hover{border-color:#22d3ee}
+.rt .mo{position:fixed;inset:0;z-index:10}
+.rt .mlist{position:absolute;right:0;top:100%;margin-top:4px;background:#30302e;border:1px solid #3d3d3a;border-radius:8px;min-width:200px;max-height:260px;overflow:auto;z-index:20}
+.rt .pk .mlist{left:0;right:auto}
+.rt .mi{padding:9px 12px;cursor:pointer;font-size:14px}
+.rt .mi:hover{background:#3d3d3a}
+.rt .mlist label.ck{margin:0;display:flex;align-items:center;gap:8px;font-size:14px;color:#faf9f5;padding:9px 12px;cursor:pointer}
+.rt .mlist label.ck:hover{background:#3d3d3a}
+.rt .cp{display:block;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt .cp:disabled{opacity:.6;cursor:default}
+.rt .dn{display:block;width:calc(100% - 24px);margin:8px 12px 10px;padding:8px 14px}
+.rt .x{background:transparent;border:0;color:#c2c0b6;font-size:16px;width:24px;cursor:pointer;flex:none;opacity:0}
+.rt .row:hover .x{opacity:1}
+.rt .x:hover{color:#f87171}
+.rt .xb{width:24px;flex:none}
+@media (hover:none){.rt .x{opacity:1}}
+
+.rt .sec{font-size:16px;font-weight:600;margin:26px 0 8px}
+.rt table{width:100%;border-collapse:collapse}
+.rt th{text-align:left;color:#c2c0b6;font-size:13px;font-weight:500;padding:10px;border-bottom:1px solid #3d3d3a}
+.rt td{padding:10px;border-bottom:1px solid #3d3d3a;font-size:14px;word-break:break-word;vertical-align:top}
+.rt .empty{color:#c2c0b6;font-size:14px;padding:14px 10px}
+
+.rt .gwrap{overflow-x:auto;padding-bottom:6px}
+.rt .g4{display:grid;grid-template-columns:1.3fr 1fr 1.4fr 1fr;gap:10px 14px;align-items:center;min-width:760px}
+.rt .gh{color:#c2c0b6;font-size:13px;font-weight:500;padding-bottom:6px;border-bottom:1px solid #3d3d3a}
+
+.rt .ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.rt .modal{background:#30302e;border:1px solid #3d3d3a;border-radius:12px;padding:22px;width:100%;max-width:420px}
+.rt .modal h3{margin:0}
+.rt .mbtns{display:flex;gap:10px;margin-top:20px}
+.rt .mbtns .btn,.rt .mbtns .ghost{margin-top:0}
+===== app\layout.js ===== 
+import "./globals.css";
+import "./app.css";
+import Sidebar from "./Sidebar";
+
+export const metadata = { title: "Routify" };
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>
+        <Sidebar>{children}</Sidebar>
+      </body>
+    </html>
+  );
+}
+===== app\locations\page.js ===== 
+"use client";
+import { useEffect, useState } from "react";
+import { supabase } from "../db";
+
+export default function Locations() {
+  const [rows, setRows] = useState([]);
+  const [name, setName] = useState("");
+  const [coords, setCoords] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const { data, error } = await supabase
+      .from("locations")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error) setErr(error.message);
+    else setRows(data);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function save() {
+    setErr("");
+    if (!name.trim() || !coords.trim()) {
+      setErr("Fill both fields.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase
+      .from("locations")
+      .insert({ name: name.trim(), coords: coords.trim() });
+    setBusy(false);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setName("");
+    setCoords("");
+    load();
+  }
+
+  return (
+    <main className="rt">
+      <h1>Locations</h1>
+
+      <div className="sec">Current saved locations</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Location name</th>
+            <th>Location coordinates</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td>{r.coords}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && <div className="empty">No saved locations yet.</div>}
+
+      <div className="sec">Add new location</div>
+      <div className="row">
+        <input
+          className="in nm"
+          placeholder="Location name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <input
+          className="in lc"
+          placeholder="Location coordinates"
+          value={coords}
+          onChange={(e) => setCoords(e.target.value)}
+        />
+      </div>
+      <button className="btn" style={{ marginTop: 8 }} onClick={save} disabled={busy}>
+        {busy ? "Saving..." : "Save"}
+      </button>
+      {err && <p className="err">{err}</p>}
+    </main>
+  );
+}
+===== app\signup\page.js ===== 
+"use client";
+import { useEffect, useState } from "react";
+import { supabase } from "../db";
+
+export default function SignUp() {
+  const [f, setF] = useState({
+    first: "",
+    middle: "",
+    last: "",
+    phone: "",
+    parentPhone: "",
+    start: "",
+    drop: "",
+  });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const digits = (s) => s.replace(/\D/g, "").length;
+
+  async function submit() {
+    setErr("");
+    if (
+      !f.first.trim() ||
+      !f.last.trim() ||
+      !f.phone.trim() ||
+      !f.parentPhone.trim() ||
+      !f.start.trim() ||
+      !f.drop.trim()
+    ) {
+      setErr("Fill all fields except middle name.");
+      return;
+    }
+    if (digits(f.phone) < 7 || digits(f.parentPhone) < 7) {
+      setErr("Enter valid phone numbers.");
+      return;
+    }
+    const t = (s) => s.trim();
+    const name = [f.first, f.middle, f.last].map(t).filter(Boolean).join(" ");
+    setBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("clients")
+        .insert({
+          name,
+          first_name: t(f.first),
+          middle_name: t(f.middle) || null,
+          last_name: t(f.last),
+          phone: t(f.phone),
+          parent_phone: t(f.parentPhone),
+          start_request: t(f.start),
+          dropoff_request: t(f.drop),
+        })
+        .select("id,client_no,first_name")
+        .single();
+      if (error) {
+        setErr(error.message);
+        setBusy(false);
+        return;
+      }
+      localStorage.setItem("abs_client", JSON.stringify(data));
+      window.location.assign("/client");
+    } catch (e) {
+      setErr(String(e && e.message ? e.message : e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="rt" style={{ maxWidth: 480 }}>
+      <h1 className="brandh">ABS</h1>
+      <h2 style={{ textAlign: "center", margin: "0 0 8px" }}>Sign up</h2>
+
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <label>First name</label>
+        <input className="in" value={f.first} onChange={set("first")} />
+
+        <label>Middle name</label>
+        <input className="in" value={f.middle} onChange={set("middle")} />
+
+        <label>Last name</label>
+        <input className="in" value={f.last} onChange={set("last")} />
+
+        <label>Phone number</label>
+        <input className="in" type="tel" value={f.phone} onChange={set("phone")} />
+
+        <label>Parent phone number</label>
+        <input className="in" type="tel" value={f.parentPhone} onChange={set("parentPhone")} />
+
+        <label>Starting location</label>
+        <input className="in" value={f.start} onChange={set("start")} />
+
+        <label>Requested drop off</label>
+        <input className="in" value={f.drop} onChange={set("drop")} />
+
+        <button className="btn" type="submit" disabled={busy || !ready}>
+          {!ready ? "Loading..." : busy ? "Signing up..." : "Sign up"}
+        </button>
+      </form>
+      {err && (
+        <p className="err" role="alert">
+          {err}
+        </p>
+      )}
+    </main>
+  );
+}
+===== app\client\page.js ===== 
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+export default function ClientHome() {
+  const [c, setC] = useState(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      setC(JSON.parse(localStorage.getItem("abs_client")));
+    } catch {}
+    setReady(true);
+  }, []);
+
+  if (!ready) return null;
+
+  return (
+    <main className="rt" style={{ maxWidth: 480 }}>
+      <h1 className="brandh">ABS</h1>
+      <h2 style={{ textAlign: "center", margin: "0 0 18px" }}>Client home</h2>
+      {c ? (
+        <div className="card" style={{ marginTop: 0 }}>
+          <div>
+            Welcome, <span className="acc">{c.first_name}</span>
+          </div>
+          <div className="muted" style={{ marginTop: 8 }}>
+            Your client ID: {c.client_no}
+          </div>
+        </div>
+      ) : (
+        <p className="muted" style={{ textAlign: "center" }}>
+          No client found on this device.{" "}
+          <Link className="maps" href="/signup">
+            Sign up
+          </Link>
+        </p>
+      )}
+    </main>
+  );
+}
+
+===== app\db.js ===== 
+import { createClient } from "@supabase/supabase-js";
+
+export const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
