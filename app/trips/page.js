@@ -6,11 +6,18 @@ import { supabase } from "../db";
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DEFAULT_STOP_MIN = 3;
 const typeOf = (t) => (t.data && t.data.type === "return" ? "return" : "arrival");
+const mk = (arr) =>
+  arr.map((l) => (
+    <option key={l.id} value={l.id}>
+      {l.name}
+    </option>
+  ));
 
 export default function Trips() {
+  const [locs, setLocs] = useState([]);
   const [dests, setDests] = useState([]);
   const [trips, setTrips] = useState([]);
-  const [type, setType] = useState("arrival");
+  const [type, setType] = useState("");
   const [startId, setStartId] = useState("");
   const [endId, setEndId] = useState("");
   const [day, setDay] = useState("");
@@ -22,15 +29,17 @@ export default function Trips() {
   const [saving, setSaving] = useState(false);
 
   const [editId, setEditId] = useState(null);
-  const [ed, setEd] = useState({ placeId: "", arrival: "" });
+  const [ed, setEd] = useState({ startId: "", endId: "", arrival: "" });
   const [listErr, setListErr] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   async function loadAll() {
-    const [d, t] = await Promise.all([
+    const [l, d, t] = await Promise.all([
+      supabase.from("locations").select("id,name,coords").order("name"),
       supabase.from("destinations").select("id,name,coords").order("name"),
       supabase.from("trips").select("id,name,data"),
     ]);
+    setLocs(l.data || []);
     setDests(d.data || []);
     setTrips((t.data || []).filter((x) => x.data && x.data.day));
   }
@@ -39,11 +48,8 @@ export default function Trips() {
     loadAll();
   }, []);
 
-  const opts = dests.map((l) => (
-    <option key={l.id} value={l.id}>
-      {l.name}
-    </option>
-  ));
+  const locOpts = mk(locs);
+  const destOpts = mk(dests);
 
   const sorted = [...trips].sort(
     (a, b) =>
@@ -52,24 +58,38 @@ export default function Trips() {
       a.name.localeCompare(b.name)
   );
 
+  function pickType(v) {
+    setType(type === v ? "" : v);
+    setStartId("");
+    setEndId("");
+  }
+
   function beginEdit(t) {
     const ty = typeOf(t);
-    const cur = ty === "return" ? t.data.start : t.data.end;
-    const l = dests.find((q) => q.name === (cur && cur.name));
+    const sl = ty === "return" ? dests : locs;
+    const find = (arr, x) => {
+      const l = arr.find((q) => q.name === (x && x.name));
+      return l ? l.id : "";
+    };
     setListErr("");
     setEditId(t.id);
-    setEd({ placeId: l ? l.id : "", arrival: t.data.arrival || "" });
+    setEd({
+      startId: find(sl, t.data.start),
+      endId: find(dests, t.data.end),
+      arrival: t.data.arrival || "",
+    });
   }
 
   async function saveEdit(t) {
     setListErr("");
+    if (!ed.arrival) return setListErr("Arrival time is required.");
     const ty = typeOf(t);
-    const p = dests.find((l) => l.id === ed.placeId);
-    const pv = p ? { name: p.name, loc: p.coords } : null;
+    const sl = ty === "return" ? dests : locs;
+    const s = sl.find((l) => l.id === ed.startId);
+    const e = dests.find((l) => l.id === ed.endId);
     const data = { ...t.data, arrival: ed.arrival };
-    if (ty === "return") {
-      if (pv) data.start = pv;
-    } else if (pv) data.end = pv;
+    if (s) data.start = { name: s.name, loc: s.coords };
+    if (ty === "arrival" && e) data.end = { name: e.name, loc: e.coords };
     setEditSaving(true);
     const res = await supabase.from("trips").update({ data }).eq("id", t.id).select();
     setEditSaving(false);
@@ -83,9 +103,16 @@ export default function Trips() {
   async function save() {
     setErr("");
     setMsg("");
-    const s = dests.find((l) => l.id === startId);
+    if (!type) {
+      setErr("Choose arrival trip or return trip.");
+      return;
+    }
+    const s =
+      type === "arrival"
+        ? locs.find((l) => l.id === startId)
+        : dests.find((l) => l.id === startId);
     const e = dests.find((l) => l.id === endId);
-    if (type === "return" && !s) {
+    if (!s) {
       setErr("Select the start location.");
       return;
     }
@@ -95,6 +122,10 @@ export default function Trips() {
     }
     if (!day) {
       setErr("Select a day.");
+      return;
+    }
+    if (!arrival) {
+      setErr("Enter the arrival time.");
       return;
     }
     if (!tripName.trim()) {
@@ -108,7 +139,7 @@ export default function Trips() {
     }
     const data = {
       type,
-      start: type === "return" ? { name: s.name, loc: s.coords } : null,
+      start: { name: s.name, loc: s.coords },
       end: type === "arrival" ? { name: e.name, loc: e.coords } : null,
       day,
       arrival,
@@ -123,6 +154,7 @@ export default function Trips() {
       setErr(error.message);
       return;
     }
+    setType("");
     setStartId("");
     setEndId("");
     setDay("");
@@ -154,7 +186,7 @@ export default function Trips() {
                   <input
                     type="checkbox"
                     checked={type === "arrival"}
-                    onChange={() => setType("arrival")}
+                    onChange={() => pickType("arrival")}
                   />
                   Arrival trip
                 </label>
@@ -164,18 +196,18 @@ export default function Trips() {
                   <input
                     type="checkbox"
                     checked={type === "return"}
-                    onChange={() => setType("return")}
+                    onChange={() => pickType("return")}
                   />
                   Return trip
                 </label>
               </div>
 
-              {type === "return" && (
+              {type && (
                 <>
                   <label>Start</label>
                   <select className="in" value={startId} onChange={(e) => setStartId(e.target.value)}>
                     <option value="">Select start</option>
-                    {opts}
+                    {type === "arrival" ? locOpts : destOpts}
                   </select>
                 </>
               )}
@@ -185,7 +217,7 @@ export default function Trips() {
                   <label>End</label>
                   <select className="in" value={endId} onChange={(e) => setEndId(e.target.value)}>
                     <option value="">Select end</option>
-                    {opts}
+                    {destOpts}
                   </select>
                 </>
               )}
@@ -200,7 +232,7 @@ export default function Trips() {
                 ))}
               </select>
 
-              <label>Arrival time (optional)</label>
+              <label>Arrival time</label>
               <input
                 className="in"
                 type="time"
@@ -276,14 +308,14 @@ export default function Trips() {
                   </Link>
                 </td>
                 <td>
-                  {editing && ty === "return" ? (
+                  {editing ? (
                     <select
                       className="in"
-                      value={ed.placeId}
-                      onChange={(e) => setEd({ ...ed, placeId: e.target.value })}
+                      value={ed.startId}
+                      onChange={(e) => setEd({ ...ed, startId: e.target.value })}
                     >
                       <option value="">{(t.data.start && t.data.start.name) || "Select start"}</option>
-                      {opts}
+                      {ty === "return" ? destOpts : locOpts}
                     </select>
                   ) : (
                     (t.data.start && t.data.start.name) || "-"
@@ -293,11 +325,11 @@ export default function Trips() {
                   {editing && ty === "arrival" ? (
                     <select
                       className="in"
-                      value={ed.placeId}
-                      onChange={(e) => setEd({ ...ed, placeId: e.target.value })}
+                      value={ed.endId}
+                      onChange={(e) => setEd({ ...ed, endId: e.target.value })}
                     >
                       <option value="">{(t.data.end && t.data.end.name) || "Select end"}</option>
-                      {opts}
+                      {destOpts}
                     </select>
                   ) : (
                     (t.data.end && t.data.end.name) || "-"
