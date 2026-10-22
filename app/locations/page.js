@@ -2,7 +2,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../db";
 
-export default function Locations() {
+async function renameLocation(oldName, newName) {
+  await supabase.from("clients").update({ stop: newName }).eq("stop", oldName);
+  await supabase.from("clients").update({ end_loc: newName }).eq("end_loc", oldName);
+}
+
+async function renameDestination(oldName, newName) {
+  await supabase.from("clients").update({ destination: newName }).eq("destination", oldName);
+}
+
+function Section({ table, word, renames }) {
   const [rows, setRows] = useState([]);
   const [name, setName] = useState("");
   const [coords, setCoords] = useState("");
@@ -13,10 +22,11 @@ export default function Locations() {
   const [edits, setEdits] = useState({});
   const [checked, setChecked] = useState({});
   const [working, setWorking] = useState(false);
+  const cap = word.charAt(0).toUpperCase() + word.slice(1);
 
   async function load() {
     const { data, error } = await supabase
-      .from("locations")
+      .from(table)
       .select("*")
       .order("created_at", { ascending: true });
     if (error) setErr(error.message);
@@ -35,7 +45,7 @@ export default function Locations() {
     }
     setBusy(true);
     const { error } = await supabase
-      .from("locations")
+      .from(table)
       .insert({ name: name.trim(), coords: coords.trim() });
     setBusy(false);
     if (error) {
@@ -84,7 +94,7 @@ export default function Locations() {
       const nm = edits[r.id].name.trim();
       const cd = edits[r.id].coords.trim();
       const u = await supabase
-        .from("locations")
+        .from(table)
         .update({ name: nm, coords: cd })
         .eq("id", r.id)
         .select();
@@ -96,10 +106,7 @@ export default function Locations() {
         setWorking(false);
         return setErr("Update was blocked. Check the Supabase policies.");
       }
-      if (nm !== r.name) {
-        await supabase.from("clients").update({ stop: nm }).eq("stop", r.name);
-        await supabase.from("clients").update({ end_loc: nm }).eq("end_loc", r.name);
-      }
+      if (nm !== r.name) await renames(r.name, nm);
     }
     setWorking(false);
     cancel();
@@ -112,14 +119,14 @@ export default function Locations() {
     if (!picked.length) return;
     if (
       !window.confirm(
-        `Delete ${picked.length} location${picked.length > 1 ? "s" : ""}? This cannot be undone.`
+        `Delete ${picked.length} ${word}${picked.length > 1 ? "s" : ""}? This cannot be undone.`
       )
     )
       return;
     setErr("");
     setWorking(true);
     const d = await supabase
-      .from("locations")
+      .from(table)
       .delete()
       .in(
         "id",
@@ -136,9 +143,7 @@ export default function Locations() {
   const allOn = rows.length > 0 && picked.length === rows.length;
 
   return (
-    <main className="rt">
-      <h1>Locations</h1>
-
+    <section style={{ marginBottom: 44 }}>
       <div
         style={{
           display: "flex",
@@ -148,14 +153,14 @@ export default function Locations() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="sec">Current saved locations</div>
+          <div className="sec">{`Current saved ${word}s`}</div>
           <div style={{ position: "relative" }}>
             <button
               className="ghost"
               style={{ marginTop: 0, padding: "4px 10px" }}
               onClick={() => setMenu(!menu)}
               disabled={!!mode}
-              aria-label="Location options"
+              aria-label={`${cap} options`}
             >
               {"\u22EE"}
             </button>
@@ -219,8 +224,8 @@ export default function Locations() {
                 />
               </th>
             )}
-            <th>Location name</th>
-            <th>Location coordinates</th>
+            <th>{`${cap} name`}</th>
+            <th>{`${cap} coordinates`}</th>
           </tr>
         </thead>
         <tbody>
@@ -265,19 +270,19 @@ export default function Locations() {
           ))}
         </tbody>
       </table>
-      {rows.length === 0 && <div className="empty">No saved locations yet.</div>}
+      {rows.length === 0 && <div className="empty">{`No saved ${word}s yet.`}</div>}
 
-      <div className="sec">Add new location</div>
+      <div className="sec">{`Add new ${word}`}</div>
       <div className="row">
         <input
           className="in nm"
-          placeholder="Location name"
+          placeholder={`${cap} name`}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <input
           className="in lc"
-          placeholder="Location coordinates"
+          placeholder={`${cap} coordinates`}
           value={coords}
           onChange={(e) => setCoords(e.target.value)}
         />
@@ -286,6 +291,16 @@ export default function Locations() {
         {busy ? "Saving..." : "Save"}
       </button>
       {err && <p className="err">{err}</p>}
+    </section>
+  );
+}
+
+export default function Locations() {
+  return (
+    <main className="rt">
+      <h1>Locations</h1>
+      <Section table="locations" word="location" renames={renameLocation} />
+      <Section table="destinations" word="destination" renames={renameDestination} />
     </main>
   );
 }

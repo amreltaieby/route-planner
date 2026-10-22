@@ -1,8 +1,60 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import "leaflet/dist/leaflet.css";
 import { supabase } from "../db";
 import { cleanUser, validUser, toEmail } from "../auth";
+
+function PinMap({ value, onPick }) {
+  const box = useRef(null);
+  const st = useRef({});
+  const pick = useRef(onPick);
+  pick.current = onPick;
+
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const mod = await import("leaflet");
+      const L = mod.default || mod;
+      if (dead || !box.current) return;
+      const map = L.map(box.current).setView([30.0444, 31.2357], 11);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+      st.current = { map, L, marker: null };
+      map.on("click", (e) => {
+        const s = st.current;
+        const ll = e.latlng;
+        if (s.marker) s.marker.setLatLng(ll);
+        else
+          s.marker = s.L.circleMarker(ll, {
+            radius: 9,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#22d3ee",
+            fillOpacity: 1,
+          }).addTo(s.map);
+        pick.current(ll.lat.toFixed(6) + "," + ll.lng.toFixed(6));
+      });
+    })();
+    return () => {
+      dead = true;
+      if (st.current.map) st.current.map.remove();
+      st.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const s = st.current;
+    if (!value && s.marker) {
+      s.marker.remove();
+      s.marker = null;
+    }
+  }, [value]);
+
+  return <div ref={box} style={{ height: 260, borderRadius: 8, border: "1px solid var(--border)" }} />;
+}
 
 export default function Join() {
   const [f, setF] = useState({
@@ -16,8 +68,10 @@ export default function Join() {
     parentPhone: "",
     stop: "",
     destination: "",
+    stopCoords: "",
   });
   const [stops, setStops] = useState([]);
+  const [dests, setDests] = useState([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -32,11 +86,15 @@ export default function Join() {
     const code = f.code.trim();
     if (code.length < 4) {
       setStops([]);
+      setDests([]);
       return;
     }
     let alive = true;
     supabase.rpc("company_locations", { p_code: code }).then((r) => {
       if (alive) setStops((r.data || []).map((x) => x.name));
+    });
+    supabase.rpc("company_destinations", { p_code: code }).then((r) => {
+      if (alive) setDests((r.data || []).map((x) => x.name));
     });
     return () => {
       alive = false;
@@ -55,7 +113,7 @@ export default function Join() {
     if (f.parentPhone.trim() && digits(f.parentPhone) < 7)
       return setErr("Enter a valid parent phone number or leave it empty.");
     if (stops.length > 0 && !f.stop) return setErr("Pick your stop.");
-    if (stops.length > 0 && !f.destination) return setErr("Pick your destination.");
+    if (dests.length > 0 && !f.destination) return setErr("Pick your destination.");
     setBusy(true);
     const su = await supabase.auth.signUp({ email: toEmail(user), password: f.password });
     if (su.error) {
@@ -78,6 +136,7 @@ export default function Join() {
       p_parent_phone: f.parentPhone.trim(),
       p_stop: f.stop,
       p_destination: f.destination,
+      p_stop_coords: f.stopCoords || null,
     });
     if (r.error) {
       await supabase.auth.signOut();
@@ -87,12 +146,18 @@ export default function Join() {
     window.location.assign("/client");
   }
 
-  const opts = stops.map((s) => (
+  const stopOpts = stops.map((s) => (
     <option key={s} value={s}>
       {s}
     </option>
   ));
-  const hint = stops.length ? "Select" : "Enter a valid company code first";
+  const destOpts = dests.map((s) => (
+    <option key={s} value={s}>
+      {s}
+    </option>
+  ));
+  const stopHint = stops.length ? "Select" : "Enter a valid company code first";
+  const destHint = dests.length ? "Select" : "Enter a valid company code first";
 
   return (
     <main className="rt" style={{ maxWidth: 480 }}>
@@ -137,14 +202,29 @@ export default function Join() {
 
         <label>Your stop</label>
         <select className="in" value={f.stop} onChange={set("stop")}>
-          <option value="">{stops.length ? "Select your stop" : hint}</option>
-          {opts}
+          <option value="">{stops.length ? "Select your stop" : stopHint}</option>
+          {stopOpts}
         </select>
+
+        <label>Drop a pin on your exact stop (optional)</label>
+        <PinMap value={f.stopCoords} onPick={(v) => setF((x) => ({ ...x, stopCoords: v }))} />
+        <p className="muted" style={{ margin: "6px 0 0" }}>
+          {f.stopCoords ? "Pin: " + f.stopCoords + " " : "Tap the map to place a pin. "}
+          {f.stopCoords && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setF((x) => ({ ...x, stopCoords: "" }))}
+            >
+              Clear pin
+            </button>
+          )}
+        </p>
 
         <label>Your destination</label>
         <select className="in" value={f.destination} onChange={set("destination")}>
-          <option value="">{stops.length ? "Select your destination" : hint}</option>
-          {opts}
+          <option value="">{dests.length ? "Select your destination" : destHint}</option>
+          {destOpts}
         </select>
 
         <button className="btn" type="submit" disabled={busy}>

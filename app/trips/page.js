@@ -4,31 +4,34 @@ import Link from "next/link";
 import { supabase } from "../db";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DEFAULT_STOP_MIN = 3;
+const typeOf = (t) => (t.data && t.data.type === "return" ? "return" : "arrival");
 
 export default function Trips() {
-  const [locs, setLocs] = useState([]);
+  const [dests, setDests] = useState([]);
   const [trips, setTrips] = useState([]);
+  const [type, setType] = useState("arrival");
   const [startId, setStartId] = useState("");
   const [endId, setEndId] = useState("");
   const [day, setDay] = useState("");
   const [arrival, setArrival] = useState("");
-  const [stopMin, setStopMin] = useState("5");
+  const [stopMin, setStopMin] = useState(String(DEFAULT_STOP_MIN));
   const [tripName, setTripName] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [editId, setEditId] = useState(null);
-  const [ed, setEd] = useState({ startId: "", endId: "", arrival: "" });
+  const [ed, setEd] = useState({ placeId: "", arrival: "" });
   const [listErr, setListErr] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   async function loadAll() {
-    const [l, t] = await Promise.all([
-      supabase.from("locations").select("id,name,coords").order("name"),
+    const [d, t] = await Promise.all([
+      supabase.from("destinations").select("id,name,coords").order("name"),
       supabase.from("trips").select("id,name,data"),
     ]);
-    setLocs(l.data || []);
+    setDests(d.data || []);
     setTrips((t.data || []).filter((x) => x.data && x.data.day));
   }
 
@@ -36,7 +39,7 @@ export default function Trips() {
     loadAll();
   }, []);
 
-  const opts = locs.map((l) => (
+  const opts = dests.map((l) => (
     <option key={l.id} value={l.id}>
       {l.name}
     </option>
@@ -50,29 +53,23 @@ export default function Trips() {
   );
 
   function beginEdit(t) {
-    const byName = (x) => {
-      const l = locs.find((q) => q.name === (x && x.name));
-      return l ? l.id : "";
-    };
+    const ty = typeOf(t);
+    const cur = ty === "return" ? t.data.start : t.data.end;
+    const l = dests.find((q) => q.name === (cur && cur.name));
     setListErr("");
     setEditId(t.id);
-    setEd({
-      startId: byName(t.data.start),
-      endId: byName(t.data.end),
-      arrival: t.data.arrival || "",
-    });
+    setEd({ placeId: l ? l.id : "", arrival: t.data.arrival || "" });
   }
 
   async function saveEdit(t) {
     setListErr("");
-    const s = locs.find((l) => l.id === ed.startId);
-    const e = locs.find((l) => l.id === ed.endId);
-    const data = {
-      ...t.data,
-      start: s ? { name: s.name, loc: s.coords } : t.data.start,
-      end: e ? { name: e.name, loc: e.coords } : t.data.end,
-      arrival: ed.arrival,
-    };
+    const ty = typeOf(t);
+    const p = dests.find((l) => l.id === ed.placeId);
+    const pv = p ? { name: p.name, loc: p.coords } : null;
+    const data = { ...t.data, arrival: ed.arrival };
+    if (ty === "return") {
+      if (pv) data.start = pv;
+    } else if (pv) data.end = pv;
     setEditSaving(true);
     const res = await supabase.from("trips").update({ data }).eq("id", t.id).select();
     setEditSaving(false);
@@ -86,10 +83,18 @@ export default function Trips() {
   async function save() {
     setErr("");
     setMsg("");
-    const s = locs.find((l) => l.id === startId);
-    const e = locs.find((l) => l.id === endId);
-    if (!s || !e || !day) {
-      setErr("Fill start, end and day.");
+    const s = dests.find((l) => l.id === startId);
+    const e = dests.find((l) => l.id === endId);
+    if (type === "return" && !s) {
+      setErr("Select the start location.");
+      return;
+    }
+    if (type === "arrival" && !e) {
+      setErr("Select the end destination.");
+      return;
+    }
+    if (!day) {
+      setErr("Select a day.");
       return;
     }
     if (!tripName.trim()) {
@@ -102,8 +107,9 @@ export default function Trips() {
       return;
     }
     const data = {
-      start: { name: s.name, loc: s.coords },
-      end: { name: e.name, loc: e.coords },
+      type,
+      start: type === "return" ? { name: s.name, loc: s.coords } : null,
+      end: type === "arrival" ? { name: e.name, loc: e.coords } : null,
       day,
       arrival,
       stopMin: sm,
@@ -121,7 +127,7 @@ export default function Trips() {
     setEndId("");
     setDay("");
     setArrival("");
-    setStopMin("5");
+    setStopMin(String(DEFAULT_STOP_MIN));
     setTripName("");
     setMsg("Trip saved.");
     loadAll();
@@ -141,17 +147,48 @@ export default function Trips() {
         <tbody>
           <tr>
             <td style={{ verticalAlign: "top" }}>
-              <label>Start</label>
-              <select className="in" value={startId} onChange={(e) => setStartId(e.target.value)}>
-                <option value="">Select start</option>
-                {opts}
-              </select>
+              <div style={{ display: "flex", gap: 24 }}>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={type === "arrival"}
+                    onChange={() => setType("arrival")}
+                  />
+                  Arrival trip
+                </label>
+                <label
+                  style={{ display: "flex", alignItems: "center", gap: 8, margin: 0, cursor: "pointer" }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={type === "return"}
+                    onChange={() => setType("return")}
+                  />
+                  Return trip
+                </label>
+              </div>
 
-              <label>End</label>
-              <select className="in" value={endId} onChange={(e) => setEndId(e.target.value)}>
-                <option value="">Select end</option>
-                {opts}
-              </select>
+              {type === "return" && (
+                <>
+                  <label>Start</label>
+                  <select className="in" value={startId} onChange={(e) => setStartId(e.target.value)}>
+                    <option value="">Select start</option>
+                    {opts}
+                  </select>
+                </>
+              )}
+
+              {type === "arrival" && (
+                <>
+                  <label>End</label>
+                  <select className="in" value={endId} onChange={(e) => setEndId(e.target.value)}>
+                    <option value="">Select end</option>
+                    {opts}
+                  </select>
+                </>
+              )}
 
               <label>Day</label>
               <select className="in" value={day} onChange={(e) => setDay(e.target.value)}>
@@ -217,6 +254,7 @@ export default function Trips() {
         <thead>
           <tr>
             <th>Trip day</th>
+            <th>Type</th>
             <th>Trip name</th>
             <th>Start location</th>
             <th>End location</th>
@@ -227,20 +265,22 @@ export default function Trips() {
         <tbody>
           {sorted.map((t) => {
             const editing = editId === t.id;
+            const ty = typeOf(t);
             return (
               <tr key={t.id}>
                 <td>{t.data.day}</td>
+                <td>{ty === "return" ? "Return" : "Arrival"}</td>
                 <td>
                   <Link className="maps" href={"/trips/" + t.id}>
                     {t.name}
                   </Link>
                 </td>
                 <td>
-                  {editing ? (
+                  {editing && ty === "return" ? (
                     <select
                       className="in"
-                      value={ed.startId}
-                      onChange={(e) => setEd({ ...ed, startId: e.target.value })}
+                      value={ed.placeId}
+                      onChange={(e) => setEd({ ...ed, placeId: e.target.value })}
                     >
                       <option value="">{(t.data.start && t.data.start.name) || "Select start"}</option>
                       {opts}
@@ -250,11 +290,11 @@ export default function Trips() {
                   )}
                 </td>
                 <td>
-                  {editing ? (
+                  {editing && ty === "arrival" ? (
                     <select
                       className="in"
-                      value={ed.endId}
-                      onChange={(e) => setEd({ ...ed, endId: e.target.value })}
+                      value={ed.placeId}
+                      onChange={(e) => setEd({ ...ed, placeId: e.target.value })}
                     >
                       <option value="">{(t.data.end && t.data.end.name) || "Select end"}</option>
                       {opts}
