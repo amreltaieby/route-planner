@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../db";
 
+const COORDS = /^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$/;
+
 export default function Requests() {
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -11,7 +13,7 @@ export default function Requests() {
   async function load() {
     const { data, error } = await supabase
       .from("clients")
-      .select("id,name,phone,parent_phone,stop,destination,created_at")
+      .select("id,name,phone,parent_phone,stop,stop_coords,destination,created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
     if (error) setErr(error.message);
@@ -33,6 +35,24 @@ export default function Requests() {
     if (!u.data || !u.data.length)
       return setErr("Update was blocked. Check the Supabase policies.");
     setRows((rs) => rs.filter((x) => x.id !== r.id));
+  }
+
+  function stopCell(r) {
+    if (!r.stop) return "-";
+    const c = (r.stop_coords || "").trim();
+    if (c && COORDS.test(c)) {
+      return (
+        <a
+          className="maps"
+          href={"https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {r.stop}
+        </a>
+      );
+    }
+    return r.stop;
   }
 
   return (
@@ -59,7 +79,7 @@ export default function Requests() {
               <td>{r.name}</td>
               <td>{r.phone || "-"}</td>
               <td>{r.parent_phone || "-"}</td>
-              <td>{r.stop || "-"}</td>
+              <td>{stopCell(r)}</td>
               <td>{r.destination || "-"}</td>
               <td>{new Date(r.created_at).toLocaleString()}</td>
               <td>

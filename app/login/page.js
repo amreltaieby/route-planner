@@ -38,7 +38,7 @@ export default function Login() {
 
   return (
     <main className="rt" style={{ maxWidth: 420 }}>
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
       <h2 style={{ textAlign: "center", margin: "0 0 8px" }}>Log in</h2>
       <form
         noValidate

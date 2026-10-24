@@ -5,6 +5,7 @@ import AuthGate from "./AuthGate";
 import Sidebar from "./Sidebar";
 
 export const metadata = { title: "Routiq" };
+export const viewport = { colorScheme: "only light" };
 
 const themeScript = `try{var t=localStorage.getItem("routiq_theme");document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark")}catch(e){}`;
 

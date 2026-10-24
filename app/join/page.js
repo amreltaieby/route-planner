@@ -63,7 +63,19 @@ function PinMap({ value, onPick }) {
     }
   }, [value]);
 
-  return <div ref={box} style={{ height: 260, borderRadius: 8, border: "1px solid var(--border)" }} />;
+  return (
+    <div
+      ref={box}
+      style={{
+        height: 260,
+        borderRadius: 8,
+        border: "1px solid var(--border)",
+        position: "relative",
+        zIndex: 0,
+        isolation: "isolate",
+      }}
+    />
+  );
 }
 
 function StopPicker({ disabled, stops, mode, value, onList, onMap }) {
@@ -72,7 +84,7 @@ function StopPicker({ disabled, stops, mode, value, onList, onMap }) {
   const list = [...stops]
     .sort((a, b) => a.localeCompare(b))
     .filter((s) => s.toLowerCase().includes(q.trim().toLowerCase()));
-  const label = mode === "map" ? "Chosen on map" : value || "Select your stop";
+  const label = mode === "map" ? "Choose on map" : value || "Select your stop";
 
   function close() {
     setOpen(false);
@@ -141,9 +153,9 @@ export default function Join() {
   const [f, setF] = useState({
     code: "",
     username: "",
+    email: "",
     password: "",
     first: "",
-    middle: "",
     last: "",
     phone: "",
     parentPhone: "",
@@ -192,6 +204,8 @@ export default function Join() {
     if (!f.code.trim()) return setErr("Enter your company code.");
     if (!validUser(user))
       return setErr("Username: 3 to 30 characters, letters, numbers, dot, dash or underscore.");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.email.trim()))
+      return setErr("Enter a valid email address.");
     if (f.password.length < 8) return setErr("Password must be at least 8 characters.");
     if (!f.first.trim() || !f.last.trim()) return setErr("Enter your first and last name.");
     if (digits(f.phone) < 7) return setErr("Enter a valid phone number.");
@@ -220,13 +234,14 @@ export default function Join() {
       p_code: f.code.trim(),
       p_username: user,
       p_first: f.first.trim(),
-      p_middle: f.middle.trim(),
+      p_middle: "",
       p_last: f.last.trim(),
       p_phone: f.phone.trim(),
       p_parent_phone: f.parentPhone.trim(),
       p_stop: stopName,
       p_destination: f.destination,
       p_stop_coords: isMap ? f.stopCoords : null,
+      p_email: f.email.trim(),
     });
     if (r.error) {
       await supabase.auth.signOut();
@@ -260,6 +275,15 @@ export default function Join() {
         <label>Username</label>
         <input className="in" autoComplete="username" value={f.username} onChange={set("username")} />
 
+        <label>Email address</label>
+        <input
+          className="in"
+          type="email"
+          autoComplete="email"
+          value={f.email}
+          onChange={set("email")}
+        />
+
         <label>Password</label>
         <input
           className="in"
@@ -271,9 +295,6 @@ export default function Join() {
 
         <label>First name</label>
         <input className="in" value={f.first} onChange={set("first")} />
-
-        <label>Middle name (optional)</label>
-        <input className="in" value={f.middle} onChange={set("middle")} />
 
         <label>Last name</label>
         <input className="in" value={f.last} onChange={set("last")} />

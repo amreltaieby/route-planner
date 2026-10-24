@@ -11,6 +11,12 @@ const toArr = (s) =>
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
+const typeOf = (t) => (t && t.data && t.data.type === "return" ? "return" : "arrival");
+const tword = (ty) => (ty === "return" ? "Return" : "Arrival");
+const placeOf = (t) => {
+  const p = typeOf(t) === "return" ? t.data.start : t.data.end;
+  return (p && p.name) || t.name;
+};
 
 function lockedNow(tz) {
   try {
@@ -104,6 +110,12 @@ export default function ClientHome() {
       .filter((t) => t.data.day === d)
       .sort((a, b) => (a.data.arrival || "99:99").localeCompare(b.data.arrival || "99:99"));
 
+  const sameTypeJoined = (ids, ty) =>
+    ids.some((id) => {
+      const o = trips.find((x) => x.id === id);
+      return o && typeOf(o) === ty;
+    });
+
   async function apply(nextSel, nextJoined) {
     const prev = { sel, joined };
     setErr("");
@@ -153,13 +165,14 @@ export default function ClientHome() {
   function pickTrip(d, t) {
     if (saving || locked.includes(d)) return;
     const list = joined[d] || [];
+    const ty = typeOf(t);
     if (list.includes(t.id)) {
       setAsk({
-        text: `Leave this trip to ${(t.data.end && t.data.end.name) || t.name} on ${d}?`,
+        text: `Leave "${placeOf(t)} | ${tword(ty)}" on ${d}?`,
         yes: () => apply(sel, { ...joined, [d]: list.filter((x) => x !== t.id) }),
       });
-    } else if (list.length >= MAXT) {
-      setErr(`You can join at most ${MAXT} trips per day.`);
+    } else if (sameTypeJoined(list, ty)) {
+      setErr(`You can join only one ${ty} trip per day.`);
     } else apply(sel, { ...joined, [d]: [...list, t.id] });
   }
 
@@ -267,7 +280,7 @@ export default function ClientHome() {
             })}
           </div>
 
-          <label>2. Join trips</label>
+          <label>2. Join trips (one arrival and one return per day)</label>
           {sel.length === 0 && <div className="muted">Pick a day to see its trips.</div>}
           {DAYS.filter((d) => sel.includes(d)).map((d) => {
             const list = tripsFor(d);
@@ -284,14 +297,15 @@ export default function ClientHome() {
                 {lk && <div className="muted">Booking for this day is closed.</div>}
                 {list.length === 0 && <div className="muted">No trips available.</div>}
                 {list.map((t) => {
+                  const ty = typeOf(t);
                   const on = mine.includes(t.id);
-                  const full = !on && mine.length >= MAXT;
+                  const full = !on && sameTypeJoined(mine, ty);
                   return (
                     <div className="tripr" key={t.id}>
                       <div>
-                        <div>{(t.data.end && t.data.end.name) || "-"}</div>
+                        <div>{placeOf(t) + " | " + tword(ty)}</div>
                         <div className="muted">
-                          {t.data.arrival ? `Arrival ${t.data.arrival}` : "No arrival time"}
+                          {t.data.arrival ? `${tword(ty)} ${t.data.arrival}` : "No time set"}
                         </div>
                       </div>
                       <button
