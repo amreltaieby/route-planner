@@ -18,6 +18,22 @@ const placeOf = (t) => {
   return (p && p.name) || t.name;
 };
 const norm = (s) => (s || "").trim().toLowerCase();
+const LABELS = {
+  first_name: "First name",
+  last_name: "Last name",
+  phone: "Phone",
+  parent_phone: "Parent phone",
+  stop: "Stop",
+  destination: "Destination",
+  days: "Days",
+};
+const showVal = (k, v) => {
+  if (k === "days") {
+    const l = DAYS.filter((d) => toArr(v).includes(d));
+    return l.length ? l.join(", ") : "-";
+  }
+  return v ? String(v) : "-";
+};
 
 function lockedNow(tz) {
   try {
@@ -50,6 +66,8 @@ export default function ClientHome() {
   const [saving, setSaving] = useState(false);
   const [ask, setAsk] = useState(null);
   const [note, setNote] = useState("");
+  const [answering, setAnswering] = useState(false);
+  const [editErr, setEditErr] = useState("");
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -61,7 +79,9 @@ export default function ClientHome() {
     async function fetchMe(uid) {
       return supabase
         .from("clients")
-        .select("id,first_name,status,days,trips_by_day,destination")
+        .select(
+          "id,first_name,last_name,phone,parent_phone,stop,status,days,trips_by_day,destination,pending_edit"
+        )
         .eq("user_id", uid)
         .maybeSingle();
     }
@@ -185,6 +205,18 @@ export default function ClientHome() {
     } else apply(sel, { ...joined, [d]: [...list, t.id] });
   }
 
+  async function respond(ok) {
+    setEditErr("");
+    setAnswering(true);
+    const r = await supabase.rpc("client_respond_edit", { p_approve: ok });
+    if (r.error) {
+      setAnswering(false);
+      setEditErr(r.error.message);
+      return;
+    }
+    window.location.reload();
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     window.location.assign("/login");
@@ -193,6 +225,9 @@ export default function ClientHome() {
   if (!ready) return null;
 
   const approved = me && me.status === "approved";
+  const changes =
+    approved && me.pending_edit && me.pending_edit.changes ? me.pending_edit.changes : null;
+  const changeKeys = changes ? Object.keys(changes).filter((k) => LABELS[k]) : [];
 
   return (
     <main className="rt" style={{ maxWidth: 520 }}>
@@ -382,6 +417,42 @@ export default function ClientHome() {
             <div className="mbtns">
               <button className="btn" onClick={() => setNote("")}>
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {changes && changeKeys.length > 0 && (
+        <div className="ov">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Your company wants to change your details</h3>
+            <p className="muted" style={{ marginTop: 10 }}>
+              Nothing is changed until you agree. Please check each change:
+            </p>
+            <div style={{ marginTop: 10 }}>
+              {changeKeys.map((k) => (
+                <div key={k} style={{ margin: "8px 0" }}>
+                  <div className="muted">{LABELS[k]}</div>
+                  <div>
+                    {showVal(k, me[k]) + " \u2192 "}
+                    <b>{showVal(k, changes[k])}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {changeKeys.includes("days") && (
+              <p className="muted">
+                Days you no longer have will also remove your trips on those days.
+              </p>
+            )}
+            {editErr && <p className="err">{editErr}</p>}
+            <div className="mbtns">
+              <button className="btn" onClick={() => respond(true)} disabled={answering}>
+                {answering ? "Saving..." : "Agree"}
+              </button>
+              <button className="ghost" onClick={() => respond(false)} disabled={answering}>
+                Decline
               </button>
             </div>
           </div>
