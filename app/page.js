@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "./db";
+import MapPicker from "./MapPicker";
 
 let uid = 0;
 const nid = () => ++uid;
@@ -61,98 +62,121 @@ function build(r, gMin) {
 
 function Row({ v, set, ph, saved, onDel, showPeople }) {
   const [open, setOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [q, setQ] = useState("");
   const shown = saved.filter((l) =>
     l.name.toLowerCase().includes(q.trim().toLowerCase())
   );
   return (
-    <div className="row">
-      <input
-        className="in nm"
-        placeholder="Name of location"
-        value={v.name}
-        onChange={(e) => set({ ...v, name: e.target.value })}
-      />
-      <input
-        className="in lc"
-        placeholder={ph}
-        value={v.loc}
-        onChange={(e) => set({ ...v, loc: e.target.value })}
-      />
-      {showPeople && (
+    <>
+      <div className="row">
         <input
-          className="in"
-          type="number"
-          min="1"
-          step="1"
-          title="People at this stop"
-          placeholder="People"
-          style={{ width: 80 }}
-          value={v.people ?? "1"}
-          onChange={(e) => {
-            const x = e.target.value;
-            set({ ...v, people: x !== "" && !(Number(x) >= 1) ? "1" : x });
-          }}
-          onBlur={() => {
-            if (!v.people) set({ ...v, people: "1" });
-          }}
+          className="in nm"
+          placeholder="Name of location"
+          value={v.name}
+          onChange={(e) => set({ ...v, name: e.target.value })}
         />
-      )}
-      <div className="hb">
-        <button
-          type="button"
-          className="mn"
-          onClick={() => {
-            setQ("");
-            setOpen(!open);
-          }}
-          aria-label="Saved locations"
-        >
-          {"\u2630"}
-        </button>
-        {open && (
-          <>
-            <div className="mo" onClick={() => setOpen(false)} />
-            <div className="mlist">
-              <div
-                style={{ position: "sticky", top: 0, background: "inherit", padding: 6 }}
-              >
-                <input
-                  className="in"
-                  autoFocus
-                  placeholder="Search"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-              {saved.length === 0 && <div className="mi muted">No saved locations</div>}
-              {saved.length > 0 && shown.length === 0 && (
-                <div className="mi muted">No match</div>
-              )}
-              {shown.map((l) => (
+        <input
+          className="in lc"
+          placeholder={ph}
+          value={v.loc}
+          onChange={(e) => set({ ...v, loc: e.target.value })}
+        />
+        {showPeople && (
+          <input
+            className="in"
+            type="number"
+            min="1"
+            step="1"
+            title="People at this stop"
+            placeholder="People"
+            style={{ width: 80 }}
+            value={v.people ?? "1"}
+            onChange={(e) => {
+              const x = e.target.value;
+              set({ ...v, people: x !== "" && !(Number(x) >= 1) ? "1" : x });
+            }}
+            onBlur={() => {
+              if (!v.people) set({ ...v, people: "1" });
+            }}
+          />
+        )}
+        <div className="hb">
+          <button
+            type="button"
+            className="mn"
+            onClick={() => {
+              setQ("");
+              setOpen(!open);
+            }}
+            aria-label="Saved locations"
+          >
+            {"\u2630"}
+          </button>
+          {open && (
+            <>
+              <div className="mo" onClick={() => setOpen(false)} />
+              <div className="mlist">
                 <div
-                  key={l.id}
+                  style={{ position: "sticky", top: 0, background: "inherit", padding: 6 }}
+                >
+                  <input
+                    className="in"
+                    autoFocus
+                    placeholder="Search"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                </div>
+                <div
                   className="mi"
+                  style={{ color: "var(--cyan)", fontWeight: 600 }}
                   onClick={() => {
-                    set({ ...v, name: l.name, loc: l.coords });
                     setOpen(false);
+                    setMapOpen(true);
                   }}
                 >
-                  {l.name}
+                  Choose on map
                 </div>
-              ))}
-            </div>
-          </>
+                {saved.length === 0 && <div className="mi muted">No saved locations</div>}
+                {saved.length > 0 && shown.length === 0 && (
+                  <div className="mi muted">No match</div>
+                )}
+                {shown.map((l) => (
+                  <div
+                    key={l.id}
+                    className="mi"
+                    onClick={() => {
+                      set({ ...v, name: l.name, loc: l.coords });
+                      setOpen(false);
+                    }}
+                  >
+                    {l.name}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        {onDel ? (
+          <button type="button" className="x" onClick={onDel} aria-label="Delete stop">
+            {"\u2715"}
+          </button>
+        ) : (
+          <span className="xb" />
         )}
       </div>
-      {onDel ? (
-        <button type="button" className="x" onClick={onDel} aria-label="Delete stop">
-          {"\u2715"}
-        </button>
-      ) : (
-        <span className="xb" />
+      {mapOpen && (
+        <MapPicker
+          initial={v.loc}
+          onConfirm={(c) => {
+            set({ ...v, loc: c });
+            setMapOpen(false);
+          }}
+          onClose={() => setMapOpen(false)}
+        />
       )}
-    </div>
+    </>
   );
 }
 

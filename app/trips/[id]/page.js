@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../db";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -12,6 +12,7 @@ const fmt = (ms) => {
 
 export default function TripPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params && params.id;
   const [trip, setTrip] = useState(null);
   const [stops, setStops] = useState([]);
@@ -22,6 +23,7 @@ export default function TripPage() {
   const [planning, setPlanning] = useState(false);
   const [planErr, setPlanErr] = useState("");
   const [plan, setPlan] = useState(null);
+  const [copied, setCopied] = useState(false);
   const [gKm, setGKm] = useState("");
   const [gMin, setGMin] = useState("");
   const [calcErr, setCalcErr] = useState("");
@@ -106,18 +108,18 @@ export default function TripPage() {
     return d.getTime();
   }
 
-  async function openMaps() {
+  async function runPlan() {
     setPlanErr("");
     setCalcErr("");
     setTimes(null);
     const d = trip.data;
     if (!d.start || !d.start.loc || !d.end || !d.end.loc) {
       setPlanErr("This trip needs a start and an end location. Edit it on the Trips page.");
-      return;
+      return null;
     }
     if (stops.length === 0) {
       setPlanErr("No stops yet.");
-      return;
+      return null;
     }
     const withLoc = [];
     const missing = [];
@@ -128,9 +130,8 @@ export default function TripPage() {
     });
     if (withLoc.length === 0) {
       setPlanErr("None of the stops match a saved location.");
-      return;
+      return null;
     }
-    const w = window.open("", "_blank");
     setPlanning(true);
     try {
       const res = await fetch("/api/plan", {
@@ -149,17 +150,15 @@ export default function TripPage() {
       const data = await res.json();
       const r = data && data.routes ? data.routes[0] : data;
       if (!res.ok || !r || data.error || !r.order) {
-        if (w) w.close();
         setPlanErr((data && data.error) || "Could not plan the route.");
         setPlanning(false);
-        return;
+        return null;
       }
       const order = r.order;
       if (order.length !== withLoc.length + 2) {
-        if (w) w.close();
         setPlanErr("Unexpected route response.");
         setPlanning(false);
-        return;
+        return null;
       }
       const legs = [];
       for (let i = 1; i < order.length; i++) legs.push(order[i].arriveMs - order[i - 1].departMs);
@@ -168,16 +167,35 @@ export default function TripPage() {
         const s = stops.find((x) => x.name === m);
         if (s) ordered.push(s);
       });
+      const p = { url: r.mapsUrl, legs, n: withLoc.length, missing };
       setStops(ordered);
-      setPlan({ url: r.mapsUrl, legs, n: withLoc.length, missing });
-      if (r.mapsUrl) {
-        if (w) w.location.href = r.mapsUrl;
-      } else if (w) w.close();
+      setPlan(p);
+      setPlanning(false);
+      return p;
     } catch {
-      if (w) w.close();
       setPlanErr("Could not reach the route service.");
+      setPlanning(false);
+      return null;
     }
-    setPlanning(false);
+  }
+
+  async function openMaps() {
+    const w = window.open("", "_blank");
+    const p = plan || (await runPlan());
+    if (p && p.url && w) w.location.href = p.url;
+    else if (w) w.close();
+  }
+
+  async function copyLink() {
+    const p = plan || (await runPlan());
+    if (!p || !p.url) return;
+    try {
+      await navigator.clipboard.writeText(p.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setPlanErr("Could not copy automatically. Use the link in the card below.");
+    }
   }
 
   function calc() {
@@ -188,7 +206,7 @@ export default function TripPage() {
     if (!(raw > 0)) return setCalcErr("Route time is zero.");
     const f = g / raw;
     const sm = (Number(trip.data.stopMin) || 0) * 60000;
-    const total = (raw * f * 60000) + plan.n * sm;
+    const total = raw * f * 60000 + plan.n * sm;
     const start = isReturn ? baseMs() : baseMs() - total;
     const rows = [{ kind: "start", leave: start }];
     let cur = start;
@@ -205,8 +223,6 @@ export default function TripPage() {
 
   if (state === "loading") return null;
 
-  const hasPlan = !!plan;
-
   return (
     <main className="rt">
       <Link className="maps" href="/trips">
@@ -221,6 +237,7 @@ export default function TripPage() {
         <>
           <h1 style={{ marginTop: 14 }}>{trip.name}</h1>
           <div className="muted">
+            {trip.data.day ? trip.data.day + " | " : ""}
             {isReturn ? "Leave time" : "Arrival time"}: {trip.data.arrival || "-"}
           </div>
 
@@ -280,10 +297,16 @@ export default function TripPage() {
             <button className="btn" onClick={openMaps} disabled={planning}>
               {planning ? "Planning..." : "Open in Google Maps"}
             </button>
+            <button className="btn" onClick={copyLink} disabled={planning}>
+              {copied ? "Link copied" : "Copy Google Maps link"}
+            </button>
+            <button className="btn" onClick={() => router.push("/trips/" + id + "/plan")}>
+              Go to plan page
+            </button>
           </div>
           {planErr && <p className="err">{planErr}</p>}
 
-          {hasPlan && (
+          {plan && (
             <section className="card" style={{ marginTop: 18 }}>
               {plan.url && (
                 <a className="maps" href={plan.url} target="_blank" rel="noreferrer">
@@ -354,6 +377,23 @@ export default function TripPage() {
             </tbody>
           </table>
           {events.length === 0 && <div className="empty">No activity yet.</div>}
+
+          <p className="muted" style={{ fontSize: 11, marginTop: 28 }}>
+            {"Routes calculated with "}
+            <a className="maps" href="https://project-osrm.org" target="_blank" rel="noreferrer">
+              OSRM
+            </a>
+            {". Map data \u00A9 "}
+            <a
+              className="maps"
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer"
+            >
+              OpenStreetMap contributors
+            </a>
+            {" (ODbL)."}
+          </p>
         </>
       )}
     </main>

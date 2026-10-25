@@ -7,6 +7,8 @@ const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 const DEFAULT_STOP_MIN = 3;
 const typeOf = (t) => (t.data && t.data.type === "return" ? "return" : "arrival");
 const timeWord = (ty) => (ty === "return" ? "Leave time" : "Arrival time");
+const nameFor = (ty, s, e) =>
+  ty === "return" ? (s ? s + " | Return" : "") : e ? e + " | Arrival" : "";
 const mk = (arr) =>
   arr.map((l) => (
     <option key={l.id} value={l.id}>
@@ -24,7 +26,6 @@ export default function Trips() {
   const [day, setDay] = useState("");
   const [arrival, setArrival] = useState("");
   const [stopMin, setStopMin] = useState(String(DEFAULT_STOP_MIN));
-  const [tripName, setTripName] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,6 +34,9 @@ export default function Trips() {
   const [ed, setEd] = useState({ startId: "", endId: "", arrival: "" });
   const [listErr, setListErr] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [menu, setMenu] = useState(null);
+  const [askDel, setAskDel] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadAll() {
     const [l, d, t] = await Promise.all([
@@ -76,6 +80,7 @@ export default function Trips() {
       return l ? l.id : "";
     };
     setListErr("");
+    setMenu(null);
     setEditId(t.id);
     setEd({
       startId: find(startListFor(ty), t.data.start),
@@ -93,14 +98,27 @@ export default function Trips() {
     const data = { ...t.data, arrival: ed.arrival };
     if (s) data.start = { name: s.name, loc: s.coords };
     if (e) data.end = { name: e.name, loc: e.coords };
+    const name =
+      nameFor(ty, data.start && data.start.name, data.end && data.end.name) || t.name;
     setEditSaving(true);
-    const res = await supabase.from("trips").update({ data }).eq("id", t.id).select();
+    const res = await supabase.from("trips").update({ data, name }).eq("id", t.id).select();
     setEditSaving(false);
     if (res.error) return setListErr(res.error.message);
     if (!res.data || !res.data.length)
       return setListErr("Update was blocked. Check the Supabase policies.");
-    setTrips((ts) => ts.map((x) => (x.id === t.id ? { ...x, data } : x)));
+    setTrips((ts) => ts.map((x) => (x.id === t.id ? { ...x, data, name } : x)));
     setEditId(null);
+  }
+
+  async function doDelete() {
+    const t = askDel;
+    setListErr("");
+    setDeleting(true);
+    const res = await supabase.rpc("operator_delete_trip", { p_trip_id: String(t.id) });
+    setDeleting(false);
+    setAskDel(null);
+    if (res.error) return setListErr(res.error.message);
+    setTrips((ts) => ts.filter((x) => x.id !== t.id));
   }
 
   async function save() {
@@ -128,10 +146,6 @@ export default function Trips() {
       setErr("Enter the " + timeWord(type).toLowerCase() + ".");
       return;
     }
-    if (!tripName.trim()) {
-      setErr("Enter a trip name.");
-      return;
-    }
     const sm = Number(stopMin) || 0;
     if (sm < 0) {
       setErr("Time per stop cannot be negative.");
@@ -148,7 +162,7 @@ export default function Trips() {
     setSaving(true);
     const { error } = await supabase
       .from("trips")
-      .insert({ name: tripName.trim(), time_min: null, distance_km: null, data });
+      .insert({ name: nameFor(type, s.name, e.name), time_min: null, distance_km: null, data });
     setSaving(false);
     if (error) {
       setErr(error.message);
@@ -160,7 +174,6 @@ export default function Trips() {
     setDay("");
     setArrival("");
     setStopMin(String(DEFAULT_STOP_MIN));
-    setTripName("");
     setMsg("Trip saved.");
     loadAll();
   }
@@ -262,13 +275,6 @@ export default function Trips() {
         }}
       >
         {msg && <span className="muted">{msg}</span>}
-        <input
-          className="in"
-          style={{ maxWidth: 260 }}
-          placeholder="Trip name"
-          value={tripName}
-          onChange={(e) => setTripName(e.target.value)}
-        />
         <button className="btn" style={{ marginTop: 0 }} onClick={save} disabled={saving}>
           {saving ? "Saving..." : "Save"}
         </button>
@@ -283,7 +289,7 @@ export default function Trips() {
           <tr>
             <th>Trip day</th>
             <th>Type</th>
-            <th>Trip name</th>
+            <th>Trip</th>
             <th>Start location</th>
             <th>End location</th>
             <th>Arrival / Leave time</th>
@@ -344,32 +350,71 @@ export default function Trips() {
                   )}
                 </td>
                 <td>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    {editing ? (
-                      <>
-                        <button
-                          className="btn"
-                          style={{ marginTop: 0 }}
-                          onClick={() => saveEdit(t)}
-                          disabled={editSaving}
-                        >
-                          {editSaving ? "Saving..." : "Save"}
-                        </button>
-                        <button className="ghost" onClick={() => setEditId(null)}>
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
+                  {editing ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button
+                        className="btn"
+                        style={{ marginTop: 0 }}
+                        onClick={() => saveEdit(t)}
+                        disabled={editSaving}
+                      >
+                        {editSaving ? "Saving..." : "Save"}
+                      </button>
+                      <button className="ghost" onClick={() => setEditId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ position: "relative" }}>
                       <button
                         className="ghost"
-                        title="Edit trip"
-                        aria-label="Edit trip"
-                        onClick={() => beginEdit(t)}
+                        title="Trip options"
+                        aria-label="Trip options"
+                        onClick={() => setMenu(menu === t.id ? null : t.id)}
                       >
                         {"\u22EE"}
                       </button>
-                    )}
-                  </div>
+                      {menu === t.id && (
+                        <>
+                          <div
+                            style={{ position: "fixed", inset: 0, zIndex: 4 }}
+                            onClick={() => setMenu(null)}
+                          />
+                          <div
+                            style={{
+                              position: "absolute",
+                              right: 0,
+                              top: "100%",
+                              zIndex: 5,
+                              minWidth: 130,
+                              background: "var(--panel)",
+                              border: "1px solid var(--border)",
+                              borderRadius: 8,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              className="mi"
+                              style={{ cursor: "pointer", padding: "10px 14px" }}
+                              onClick={() => beginEdit(t)}
+                            >
+                              Edit
+                            </div>
+                            <div
+                              className="mi"
+                              style={{ cursor: "pointer", padding: "10px 14px", color: "var(--err)" }}
+                              onClick={() => {
+                                setMenu(null);
+                                setAskDel(t);
+                              }}
+                            >
+                              Delete
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </td>
               </tr>
             );
@@ -378,6 +423,29 @@ export default function Trips() {
       </table>
       {sorted.length === 0 && <div className="empty">No trips yet.</div>}
       {listErr && <p className="err">{listErr}</p>}
+
+      {askDel && (
+        <div className="ov" onClick={() => !deleting && setAskDel(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Are you sure?</h3>
+            <p className="muted" style={{ marginTop: 10 }}>
+              {"Delete \"" +
+                askDel.name +
+                "\" on " +
+                askDel.data.day +
+                "? Clients who joined it will be removed from it. This cannot be undone."}
+            </p>
+            <div className="mbtns">
+              <button className="btn" onClick={doDelete} disabled={deleting}>
+                {deleting ? "Deleting..." : "Yes, delete"}
+              </button>
+              <button className="ghost" onClick={() => setAskDel(null)} disabled={deleting}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "../db";
+import MapPicker from "../MapPicker";
 
 async function renameLocation(oldName, newName) {
   await supabase.from("clients").update({ stop: newName }).eq("stop", oldName);
@@ -22,6 +23,7 @@ function Section({ table, word, renames }) {
   const [edits, setEdits] = useState({});
   const [checked, setChecked] = useState({});
   const [working, setWorking] = useState(false);
+  const [mapFor, setMapFor] = useState(null);
   const cap = word.charAt(0).toUpperCase() + word.slice(1);
 
   async function load() {
@@ -255,13 +257,25 @@ function Section({ table, word, renames }) {
               </td>
               <td>
                 {mode === "edit" && edits[r.id] ? (
-                  <input
-                    className="in"
-                    value={edits[r.id].coords}
-                    onChange={(e) =>
-                      setEdits((x) => ({ ...x, [r.id]: { ...x[r.id], coords: e.target.value } }))
-                    }
-                  />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      className="in"
+                      value={edits[r.id].coords}
+                      onChange={(e) =>
+                        setEdits((x) => ({ ...x, [r.id]: { ...x[r.id], coords: e.target.value } }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="ghost"
+                      style={{ marginTop: 0, flex: "none" }}
+                      title="Choose on map"
+                      aria-label="Choose on map"
+                      onClick={() => setMapFor(r.id)}
+                    >
+                      Map
+                    </button>
+                  </div>
                 ) : (
                   r.coords
                 )}
@@ -286,11 +300,31 @@ function Section({ table, word, renames }) {
           value={coords}
           onChange={(e) => setCoords(e.target.value)}
         />
+        <button
+          type="button"
+          className="ghost"
+          style={{ marginTop: 0, flex: "none" }}
+          onClick={() => setMapFor("add")}
+        >
+          Choose on map
+        </button>
       </div>
       <button className="btn" style={{ marginTop: 8 }} onClick={save} disabled={busy}>
         {busy ? "Saving..." : "Save"}
       </button>
       {err && <p className="err">{err}</p>}
+
+      {mapFor !== null && (
+        <MapPicker
+          initial={mapFor === "add" ? coords : (edits[mapFor] && edits[mapFor].coords) || ""}
+          onConfirm={(c) => {
+            if (mapFor === "add") setCoords(c);
+            else setEdits((x) => ({ ...x, [mapFor]: { ...x[mapFor], coords: c } }));
+            setMapFor(null);
+          }}
+          onClose={() => setMapFor(null)}
+        />
+      )}
     </section>
   );
 }
