@@ -17,6 +17,7 @@ const placeOf = (t) => {
   const p = typeOf(t) === "return" ? t.data.start : t.data.end;
   return (p && p.name) || t.name;
 };
+const norm = (s) => (s || "").trim().toLowerCase();
 
 function lockedNow(tz) {
   try {
@@ -48,6 +49,7 @@ export default function ClientHome() {
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [ask, setAsk] = useState(null);
+  const [note, setNote] = useState("");
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function ClientHome() {
     async function fetchMe(uid) {
       return supabase
         .from("clients")
-        .select("id,first_name,status,days,trips_by_day")
+        .select("id,first_name,status,days,trips_by_day,destination")
         .eq("user_id", uid)
         .maybeSingle();
     }
@@ -105,9 +107,14 @@ export default function ClientHome() {
 
   const locked = lockedNow(tz);
 
+  const myDest = norm(me && me.destination);
   const tripsFor = (d) =>
     trips
-      .filter((t) => t.data.day === d)
+      .filter(
+        (t) =>
+          t.data.day === d &&
+          (!myDest || norm(placeOf(t)) === myDest || (joined[d] || []).includes(t.id))
+      )
       .sort((a, b) => (a.data.arrival || "99:99").localeCompare(b.data.arrival || "99:99"));
 
   const sameTypeJoined = (ids, ty) =>
@@ -172,7 +179,9 @@ export default function ClientHome() {
         yes: () => apply(sel, { ...joined, [d]: list.filter((x) => x !== t.id) }),
       });
     } else if (sameTypeJoined(list, ty)) {
-      setErr(`You can join only one ${ty} trip per day.`);
+      setNote(
+        `You already joined a ${ty} trip on ${d}. Joining another one would exceed the limit of one arrival trip and one return trip per day. To switch, leave your current ${ty} trip first.`
+      );
     } else apply(sel, { ...joined, [d]: [...list, t.id] });
   }
 
@@ -311,7 +320,7 @@ export default function ClientHome() {
                       <button
                         className={on ? "btn" : "ghost"}
                         style={{ marginTop: 0, ...(full ? { opacity: 0.5 } : {}) }}
-                        disabled={saving || lk || full}
+                        disabled={saving || lk}
                         onClick={() => pickTrip(d, t)}
                       >
                         {on ? "Joined" : "Join"}
@@ -357,6 +366,22 @@ export default function ClientHome() {
               </button>
               <button className="ghost" onClick={() => setAsk(null)}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {note && (
+        <div className="ov" onClick={() => setNote("")}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Trip limit reached</h3>
+            <p className="muted" style={{ marginTop: 10 }}>
+              {note}
+            </p>
+            <div className="mbtns">
+              <button className="btn" onClick={() => setNote("")}>
+                OK
               </button>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { supabase } from "../db";
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DEFAULT_STOP_MIN = 3;
 const typeOf = (t) => (t.data && t.data.type === "return" ? "return" : "arrival");
+const timeWord = (ty) => (ty === "return" ? "Leave time" : "Arrival time");
 const mk = (arr) =>
   arr.map((l) => (
     <option key={l.id} value={l.id}>
@@ -85,8 +86,8 @@ export default function Trips() {
 
   async function saveEdit(t) {
     setListErr("");
-    if (!ed.arrival) return setListErr("Arrival time is required.");
     const ty = typeOf(t);
+    if (!ed.arrival) return setListErr(timeWord(ty) + " is required.");
     const s = startListFor(ty).find((l) => l.id === ed.startId);
     const e = endListFor(ty).find((l) => l.id === ed.endId);
     const data = { ...t.data, arrival: ed.arrival };
@@ -124,7 +125,7 @@ export default function Trips() {
       return;
     }
     if (!arrival) {
-      setErr("Enter the arrival time.");
+      setErr("Enter the " + timeWord(type).toLowerCase() + ".");
       return;
     }
     if (!tripName.trim()) {
@@ -227,7 +228,7 @@ export default function Trips() {
                 ))}
               </select>
 
-              <label>Arrival time</label>
+              <label>{timeWord(type)}</label>
               <input
                 className="in"
                 type="time"
@@ -285,7 +286,7 @@ export default function Trips() {
             <th>Trip name</th>
             <th>Start location</th>
             <th>End location</th>
-            <th>Arrival time</th>
+            <th>Arrival / Leave time</th>
             <th></th>
           </tr>
         </thead>

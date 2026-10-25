@@ -196,6 +196,21 @@ export default function Join() {
     };
   }, [f.code]);
 
+  function onEnter(e) {
+    if (e.key !== "Enter") return;
+    const t = e.target;
+    if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA") return;
+    e.preventDefault();
+    if (t.closest(".mlist")) return;
+    const els = Array.from(e.currentTarget.querySelectorAll("input, select, button.cp")).filter(
+      (x) => !x.disabled && !x.closest(".mlist")
+    );
+    const i = els.indexOf(t);
+    if (i === -1) return;
+    if (i === els.length - 1) submit();
+    else els[i + 1].focus();
+  }
+
   async function submit() {
     setErr("");
     const user = cleanUser(f.username);
@@ -264,6 +279,7 @@ export default function Join() {
       <h2 style={{ textAlign: "center", margin: "0 0 8px" }}>Join your company</h2>
       <form
         noValidate
+        onKeyDown={onEnter}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -293,11 +309,16 @@ export default function Join() {
           onChange={set("password")}
         />
 
-        <label>First name</label>
-        <input className="in" value={f.first} onChange={set("first")} />
-
-        <label>Last name</label>
-        <input className="in" value={f.last} onChange={set("last")} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label>First name</label>
+            <input className="in" value={f.first} onChange={set("first")} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <label>Last name</label>
+            <input className="in" value={f.last} onChange={set("last")} />
+          </div>
+        </div>
 
         <label>Phone number</label>
         <input className="in" type="tel" value={f.phone} onChange={set("phone")} />
