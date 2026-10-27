@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../db";
+import { useLang, DAYS } from "../lang";
+import ClientNav from "../ClientNav";
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MAXT = 2;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const toArr = (s) =>
@@ -12,48 +13,42 @@ const toArr = (s) =>
     .map((x) => x.trim())
     .filter(Boolean);
 const typeOf = (t) => (t && t.data && t.data.type === "return" ? "return" : "arrival");
-const tword = (ty) => (ty === "return" ? "Return" : "Arrival");
 const placeOf = (t) => {
   const p = typeOf(t) === "return" ? t.data.start : t.data.end;
   return (p && p.name) || t.name;
 };
 const norm = (s) => (s || "").trim().toLowerCase();
-const LABELS = {
-  first_name: "First name",
-  last_name: "Last name",
-  phone: "Phone",
-  parent_phone: "Parent phone",
-  stop: "Stop",
-  destination: "Destination",
-  days: "Days",
-};
-const showVal = (k, v) => {
-  if (k === "days") {
-    const l = DAYS.filter((d) => toArr(v).includes(d));
-    return l.length ? l.join(", ") : "-";
-  }
-  return v ? String(v) : "-";
-};
+const FIELD_KEYS = ["first_name", "last_name", "phone", "parent_phone", "stop", "destination", "days"];
 
-function lockedNow(tz) {
+function clockIn(tz) {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
       weekday: "long",
       hour: "numeric",
+      minute: "numeric",
       hourCycle: "h23",
     }).formatToParts(new Date());
-    const wd = parts.find((p) => p.type === "weekday").value;
-    const hr = Number(parts.find((p) => p.type === "hour").value);
-    const out = [wd];
-    if (hr >= 21) out.push(DAYS[(DAYS.indexOf(wd) + 1) % 7]);
-    return out;
+    const g = (k) => parts.find((p) => p.type === k).value;
+    return { wd: g("weekday"), hr: Number(g("hour")), min: Number(g("minute")) };
   } catch {
-    return [];
+    return null;
   }
 }
 
+function dayState(d, ck) {
+  if (!ck) return { locked: false };
+  const nextD = DAYS[(DAYS.indexOf(ck.wd) + 1) % 7];
+  if (d === ck.wd) return { locked: true, kind: "tom" };
+  if (d === nextD) {
+    if (ck.hr >= 21) return { locked: true, kind: "later" };
+    return { locked: false, left: 21 * 60 - (ck.hr * 60 + ck.min) };
+  }
+  return { locked: false };
+}
+
 export default function ClientHome() {
+  const { t: L, dir } = useLang();
   const [me, setMe] = useState(null);
   const [noSession, setNoSession] = useState(false);
   const [trips, setTrips] = useState([]);
@@ -125,7 +120,8 @@ export default function ClientHome() {
     init();
   }, []);
 
-  const locked = lockedNow(tz);
+  const ck = clockIn(tz);
+  const isLocked = (d) => dayState(d, ck).locked;
 
   const myDest = norm(me && me.destination);
   const tripsFor = (d) =>
@@ -166,17 +162,15 @@ export default function ClientHome() {
       setErr(r.error.message);
       return;
     }
-    setMsg("Saved.");
+    setMsg(L.saved);
   }
 
   function pickDay(d) {
-    if (saving || locked.includes(d)) return;
+    if (saving || isLocked(d)) return;
     if (sel.includes(d)) {
       const n = (joined[d] || []).length;
       setAsk({
-        text: n
-          ? `Unselect ${d}? This will also remove your ${n} trip${n > 1 ? "s" : ""} on that day.`
-          : `Unselect ${d}?`,
+        text: L.unselect(L.days[d], n),
         yes: () => {
           const nj = { ...joined };
           delete nj[d];
@@ -190,18 +184,16 @@ export default function ClientHome() {
   }
 
   function pickTrip(d, t) {
-    if (saving || locked.includes(d)) return;
+    if (saving || isLocked(d)) return;
     const list = joined[d] || [];
     const ty = typeOf(t);
     if (list.includes(t.id)) {
       setAsk({
-        text: `Leave "${placeOf(t)} | ${tword(ty)}" on ${d}?`,
+        text: L.leave(placeOf(t), L.ty[ty], L.days[d]),
         yes: () => apply(sel, { ...joined, [d]: list.filter((x) => x !== t.id) }),
       });
     } else if (sameTypeJoined(list, ty)) {
-      setNote(
-        `You already joined a ${ty} trip on ${d}. Joining another one would exceed the limit of one arrival trip and one return trip per day. To switch, leave your current ${ty} trip first.`
-      );
+      setNote(L.limitNote(L.ty[ty], L.days[d]));
     } else apply(sel, { ...joined, [d]: [...list, t.id] });
   }
 
@@ -224,122 +216,116 @@ export default function ClientHome() {
 
   if (!ready) return null;
 
+  const showVal = (k, v) => {
+    if (k === "days") {
+      const l = DAYS.filter((d) => toArr(v).includes(d));
+      return l.length ? l.map((d) => L.days[d]).join(", ") : "-";
+    }
+    return v ? String(v) : "-";
+  };
+
   const approved = me && me.status === "approved";
   const changes =
     approved && me.pending_edit && me.pending_edit.changes ? me.pending_edit.changes : null;
-  const changeKeys = changes ? Object.keys(changes).filter((k) => LABELS[k]) : [];
+  const changeKeys = changes ? Object.keys(changes).filter((k) => FIELD_KEYS.includes(k)) : [];
 
   return (
-    <main className="rt" style={{ maxWidth: 520 }}>
+    <main className="rt cl" dir={dir} style={{ maxWidth: 520 }}>
       <h1 className="brandh">Routiq</h1>
 
       {noSession && (
         <p className="muted" style={{ textAlign: "center" }}>
-          You are not logged in.{" "}
+          {L.notLoggedIn}{" "}
           <Link className="maps" href="/login">
-            Log in
+            {L.login}
           </Link>
         </p>
       )}
 
       {!noSession && !me && (
         <section className="card" style={{ marginTop: 0 }}>
-          <div>
-            Your client profile was not found. If you just signed up, try again in a moment.
-            Otherwise contact your company.
-          </div>
+          <div>{L.notFound}</div>
           <div className="mbtns">
             <button className="btn" onClick={() => window.location.reload()}>
-              Try again
+              {L.tryAgain}
             </button>
             <button className="ghost" onClick={logout}>
-              Log out
+              {L.logout}
             </button>
           </div>
         </section>
       )}
 
       {me && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div>
-            Welcome, <span className="acc">{me.first_name}</span>
-          </div>
-          <button className="ghost" style={{ marginTop: 0 }} onClick={logout}>
-            Log out
-          </button>
+        <div>
+          {L.welcome} <span className="acc">{me.first_name}</span>
         </div>
       )}
 
       {me && me.status === "pending" && (
         <section className="card">
           <div className="sec" style={{ margin: "0 0 8px" }}>
-            Request sent
+            {L.requestSent}
           </div>
-          <div>
-            The last step is for your company to approve your join request. You will be able to
-            book trips once it is approved.
-          </div>
+          <div>{L.pendingText}</div>
         </section>
       )}
 
       {me && me.status === "rejected" && (
         <section className="card">
-          <div>Your join request was declined. Please contact your company.</div>
+          <div>{L.declined}</div>
         </section>
       )}
 
       {approved && (
         <>
           <div className="sec" style={{ marginTop: 28 }}>
-            Book trips
+            {L.book}
           </div>
           <p className="muted" style={{ margin: "0 0 4px" }}>
-            book your trip early, booking a trip closes at 9pm on the day before the trip
+            {L.bookNote}
           </p>
 
-          <label>1. Pick your days</label>
+          <label>{L.step1}</label>
           <div className="daygrid">
             {DAYS.map((d) => {
-              const lk = locked.includes(d);
+              const st = dayState(d, ck);
+              let sfx = "";
+              if (st.locked) sfx = ` (${st.kind === "tom" ? L.closedTom : L.closedLater})`;
+              else if (st.left != null)
+                sfx = ` (${L.closesIn(Math.floor(st.left / 60), st.left % 60)})`;
               return (
                 <button
                   key={d}
                   type="button"
                   className={sel.includes(d) ? "daybtn on" : "daybtn"}
-                  style={lk ? { opacity: 0.5, cursor: "default" } : undefined}
-                  disabled={saving || lk}
+                  style={st.locked ? { opacity: 0.5, cursor: "default" } : undefined}
+                  disabled={saving || st.locked}
                   onClick={() => pickDay(d)}
                 >
-                  {d}
-                  {lk ? " (closed)" : ""}
+                  {L.days[d]}
+                  {sfx}
                 </button>
               );
             })}
           </div>
 
-          <label>2. Join trips (one arrival and one return per day)</label>
-          {sel.length === 0 && <div className="muted">Pick a day to see its trips.</div>}
+          <label>{L.step2}</label>
+          {sel.length === 0 && <div className="muted">{L.pickHint}</div>}
           {DAYS.filter((d) => sel.includes(d)).map((d) => {
             const list = tripsFor(d);
             const mine = joined[d] || [];
-            const lk = locked.includes(d);
+            const lk = isLocked(d);
             return (
               <div key={d} style={{ marginBottom: 14 }}>
                 <div className="sec" style={{ margin: "14px 0 0", fontSize: 15 }}>
-                  {d}{" "}
+                  {L.days[d]}{" "}
                   <span className="muted">
-                    ({mine.length}/{MAXT} trips)
+                    ({mine.length}/{MAXT} {L.tripsWord})
                   </span>
                 </div>
-                {lk && <div className="muted">Booking for this day is closed.</div>}
-                {list.length === 0 && <div className="muted">No trips available.</div>}
+                {lk && <div className="muted">{L.dayClosed}</div>}
+                {list.length === 0 && <div className="muted">{L.noTrips}</div>}
                 {list.map((t) => {
                   const ty = typeOf(t);
                   const on = mine.includes(t.id);
@@ -347,9 +333,9 @@ export default function ClientHome() {
                   return (
                     <div className="tripr" key={t.id}>
                       <div>
-                        <div>{placeOf(t) + " | " + tword(ty)}</div>
+                        <div>{placeOf(t) + " | " + L.ty[ty]}</div>
                         <div className="muted">
-                          {t.data.arrival ? `${tword(ty)} ${t.data.arrival}` : "No time set"}
+                          {t.data.arrival ? `${L.ty[ty]} ${t.data.arrival}` : L.noTime}
                         </div>
                       </div>
                       <button
@@ -358,7 +344,7 @@ export default function ClientHome() {
                         disabled={saving || lk}
                         onClick={() => pickTrip(d, t)}
                       >
-                        {on ? "Joined" : "Join"}
+                        {on ? L.joined : L.join}
                       </button>
                     </div>
                   );
@@ -368,7 +354,7 @@ export default function ClientHome() {
           })}
 
           <div style={{ minHeight: 22, marginTop: 8 }}>
-            {saving && <span className="muted">Saving...</span>}
+            {saving && <span className="muted">{L.saving}</span>}
             {!saving && msg && <span className="muted">{msg}</span>}
           </div>
           {err && <p className="err">{err}</p>}
@@ -377,14 +363,14 @@ export default function ClientHome() {
 
       <p className="muted" style={{ marginTop: 28 }}>
         <Link className="maps" href="/terms">
-          Terms and policy
+          {L.terms}
         </Link>
       </p>
 
       {ask && (
         <div className="ov" onClick={() => setAsk(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Are you sure?</h3>
+            <h3>{L.sure}</h3>
             <p className="muted" style={{ marginTop: 10 }}>
               {ask.text}
             </p>
@@ -397,10 +383,10 @@ export default function ClientHome() {
                   y();
                 }}
               >
-                Yes
+                {L.yes}
               </button>
               <button className="ghost" onClick={() => setAsk(null)}>
-                Cancel
+                {L.cancel}
               </button>
             </div>
           </div>
@@ -410,13 +396,13 @@ export default function ClientHome() {
       {note && (
         <div className="ov" onClick={() => setNote("")}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Trip limit reached</h3>
+            <h3>{L.limitTitle}</h3>
             <p className="muted" style={{ marginTop: 10 }}>
               {note}
             </p>
             <div className="mbtns">
               <button className="btn" onClick={() => setNote("")}>
-                OK
+                {L.ok}
               </button>
             </div>
           </div>
@@ -426,14 +412,14 @@ export default function ClientHome() {
       {changes && changeKeys.length > 0 && (
         <div className="ov">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Your company wants to change your details</h3>
+            <h3>{L.changeTitle}</h3>
             <p className="muted" style={{ marginTop: 10 }}>
-              Nothing is changed until you agree. Please check each change:
+              {L.changeSub}
             </p>
             <div style={{ marginTop: 10 }}>
               {changeKeys.map((k) => (
                 <div key={k} style={{ margin: "8px 0" }}>
-                  <div className="muted">{LABELS[k]}</div>
+                  <div className="muted">{L.f[k]}</div>
                   <div>
                     {showVal(k, me[k]) + " \u2192 "}
                     <b>{showVal(k, changes[k])}</b>
@@ -441,23 +427,21 @@ export default function ClientHome() {
                 </div>
               ))}
             </div>
-            {changeKeys.includes("days") && (
-              <p className="muted">
-                Days you no longer have will also remove your trips on those days.
-              </p>
-            )}
+            {changeKeys.includes("days") && <p className="muted">{L.daysNote}</p>}
             {editErr && <p className="err">{editErr}</p>}
             <div className="mbtns">
               <button className="btn" onClick={() => respond(true)} disabled={answering}>
-                {answering ? "Saving..." : "Agree"}
+                {answering ? L.saving : L.agree}
               </button>
               <button className="ghost" onClick={() => respond(false)} disabled={answering}>
-                Decline
+                {L.decline}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {me && <ClientNav />}
     </main>
   );
 }
