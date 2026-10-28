@@ -39,7 +39,7 @@ export default function ClientSettings() {
 
   return (
     <main className="rt cl" dir={dir} style={{ maxWidth: 520 }}>
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
       <h2 style={{ textAlign: "center", margin: "0 0 8px" }}>{L.settings}</h2>
 
       <div style={{ marginTop: 18 }}>

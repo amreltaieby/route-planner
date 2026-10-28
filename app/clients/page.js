@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from "react";
 import { supabase } from "../db";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const COORDS = /^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$/;
 const toArr = (s) =>
   (s || "")
     .split(",")
@@ -13,11 +14,15 @@ const digits = (s) => (s || "").replace(/\D/g, "").length;
 
 export default function Clients() {
   const [rows, setRows] = useState([]);
+  const [reqs, setReqs] = useState([]);
+  const [reqLoaded, setReqLoaded] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [trips, setTrips] = useState([]);
   const [locs, setLocs] = useState([]);
   const [dests, setDests] = useState([]);
   const [users, setUsers] = useState({});
   const [err, setErr] = useState("");
+  const [reqErr, setReqErr] = useState("");
   const [menu, setMenu] = useState(null);
   const [editId, setEditId] = useState(null);
   const [ed, setEd] = useState(null);
@@ -26,29 +31,46 @@ export default function Clients() {
   const [askDel, setAskDel] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  async function loadClients() {
+    const [c, u] = await Promise.all([
+      supabase
+        .from("clients")
+        .select("*")
+        .eq("status", "approved")
+        .order("created_at", { ascending: true }),
+      supabase.rpc("operator_client_usernames"),
+    ]);
+    if (c.error) setErr(c.error.message);
+    else setRows(c.data || []);
+    const m = {};
+    (u.data || []).forEach((x) => {
+      m[x.client_id] = x.username;
+    });
+    setUsers(m);
+  }
+
+  async function loadReqs() {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id,name,phone,parent_phone,stop,stop_coords,destination,created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+    if (error) setReqErr(error.message);
+    setReqs(data || []);
+    setReqLoaded(true);
+  }
+
   useEffect(() => {
     async function init() {
-      const [c, t, l, d, u] = await Promise.all([
-        supabase
-          .from("clients")
-          .select("*")
-          .eq("status", "approved")
-          .order("created_at", { ascending: true }),
+      const [t, l, d] = await Promise.all([
         supabase.from("trips").select("id,name,data"),
         supabase.from("locations").select("name").order("name"),
         supabase.from("destinations").select("name").order("name"),
-        supabase.rpc("operator_client_usernames"),
       ]);
-      if (c.error) setErr(c.error.message);
-      else setRows(c.data || []);
       setTrips((t.data || []).filter((x) => x.data && x.data.day));
       setLocs((l.data || []).map((x) => x.name));
       setDests((d.data || []).map((x) => x.name));
-      const m = {};
-      (u.data || []).forEach((x) => {
-        m[x.client_id] = x.username;
-      });
-      setUsers(m);
+      await Promise.all([loadClients(), loadReqs()]);
     }
     init();
   }, []);
@@ -57,6 +79,41 @@ export default function Clients() {
     const t = trips.find((x) => x.id === id);
     return t ? t.name : null;
   };
+
+  async function decide(r, status) {
+    if (status === "rejected" && !window.confirm(`Reject ${r.name}'s request?`)) return;
+    setReqErr("");
+    setBusyId(r.id);
+    const u = await supabase.from("clients").update({ status }).eq("id", r.id).select();
+    setBusyId(null);
+    if (u.error) return setReqErr(u.error.message);
+    if (!u.data || !u.data.length)
+      return setReqErr("Update was blocked. Check the Supabase policies.");
+    setReqs((rs) => rs.filter((x) => x.id !== r.id));
+    if (status === "approved") {
+      const l = await supabase.from("locations").select("name").order("name");
+      setLocs((l.data || []).map((x) => x.name));
+      await loadClients();
+    }
+  }
+
+  function stopCell(r) {
+    if (!r.stop) return "-";
+    const c = (r.stop_coords || "").trim();
+    if (c && COORDS.test(c)) {
+      return (
+        <a
+          className="maps"
+          href={"https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {r.stop}
+        </a>
+      );
+    }
+    return r.stop;
+  }
 
   function beginEdit(r) {
     const parts = (r.name || "").split(" ");
@@ -414,6 +471,61 @@ export default function Clients() {
         </tbody>
       </table>
       {rows.length === 0 && <div className="empty">No clients yet.</div>}
+
+      <div className="sec" style={{ marginTop: 44 }}>
+        Client requests
+      </div>
+      <p className="muted" style={{ margin: "0 0 8px" }}>
+        Clients who signed up with your company code and are waiting for approval.
+      </p>
+      {reqErr && <p className="err">{reqErr}</p>}
+
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Parent phone</th>
+            <th>Stop</th>
+            <th>Destination</th>
+            <th>Requested</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {reqs.map((r) => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td>{r.phone || "-"}</td>
+              <td>{r.parent_phone || "-"}</td>
+              <td>{stopCell(r)}</td>
+              <td>{r.destination || "-"}</td>
+              <td>{new Date(r.created_at).toLocaleString()}</td>
+              <td>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className="btn"
+                    style={{ marginTop: 0 }}
+                    disabled={busyId === r.id}
+                    onClick={() => decide(r, "approved")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="ghost"
+                    style={{ marginTop: 0 }}
+                    disabled={busyId === r.id}
+                    onClick={() => decide(r, "rejected")}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {reqLoaded && reqs.length === 0 && <div className="empty">No pending requests.</div>}
 
       {askDel && (
         <div className="ov" onClick={() => !deleting && setAskDel(null)}>

@@ -1,56 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import "leaflet/dist/leaflet.css";
+import { useState } from "react";
+import MapBox from "./MapBox";
 
 export const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-export default function MapPicker({ initial, onConfirm, onClose }) {
-  const box = useRef(null);
-  const st = useRef({});
-  const [pin, setPin] = useState("");
+function startPin(initial) {
+  const p = (initial || "").split(",").map((s) => Number(s.trim()));
+  if (p.length === 2 && p.every(Number.isFinite) && String(initial).trim() !== "")
+    return p[0].toFixed(6) + "," + p[1].toFixed(6);
+  return "";
+}
 
-  useEffect(() => {
-    let dead = false;
-    (async () => {
-      const mod = await import("leaflet");
-      const L = mod.default || mod;
-      if (dead || !box.current) return;
-      const map = L.map(box.current).setView([30.0444, 31.2357], 11);
-      L.tileLayer(TILE_URL, {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-      let marker = null;
-      const place = (ll) => {
-        if (marker) marker.setLatLng(ll);
-        else
-          marker = L.circleMarker(ll, {
-            radius: 9,
-            color: "#ffffff",
-            weight: 2,
-            fillColor: "#22d3ee",
-            fillOpacity: 1,
-          }).addTo(map);
-      };
-      const p = (initial || "").split(",").map((s) => Number(s.trim()));
-      if (p.length === 2 && p.every(Number.isFinite) && String(initial).trim() !== "") {
-        place(L.latLng(p[0], p[1]));
-        map.setView([p[0], p[1]], 16);
-        setPin(p[0].toFixed(6) + "," + p[1].toFixed(6));
-      }
-      map.on("click", (e) => {
-        place(e.latlng);
-        setPin(e.latlng.lat.toFixed(6) + "," + e.latlng.lng.toFixed(6));
-      });
-      st.current = { map };
-      setTimeout(() => map.invalidateSize(), 50);
-    })();
-    return () => {
-      dead = true;
-      if (st.current.map) st.current.map.remove();
-      st.current = {};
-    };
-  }, []);
+export default function MapPicker({ initial, onConfirm, onClose }) {
+  const [pin, setPin] = useState(() => startPin(initial));
 
   return (
     <div className="ov" onClick={onClose}>
@@ -59,17 +21,7 @@ export default function MapPicker({ initial, onConfirm, onClose }) {
         <p className="muted" style={{ margin: "8px 0 10px" }}>
           Tap the map to drop a pin, then press Confirm.
         </p>
-        <div
-          ref={box}
-          style={{
-            height: 340,
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            position: "relative",
-            zIndex: 0,
-            isolation: "isolate",
-          }}
-        />
+        <MapBox initial={initial} value={pin} onPick={setPin} height={340} />
         <p className="muted" style={{ margin: "8px 0 0" }}>
           {pin ? "Pin: " + pin : "No pin placed yet."}
         </p>

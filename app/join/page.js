@@ -1,81 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import "leaflet/dist/leaflet.css";
 import { supabase } from "../db";
 import { cleanUser, validUser, toEmail } from "../auth";
+import MapBox from "../MapBox";
 
 function PinMap({ value, onPick }) {
-  const box = useRef(null);
-  const st = useRef({});
-  const pick = useRef(onPick);
-  const init = useRef(value);
-  pick.current = onPick;
-
-  useEffect(() => {
-    let dead = false;
-    (async () => {
-      const mod = await import("leaflet");
-      const L = mod.default || mod;
-      if (dead || !box.current) return;
-      const map = L.map(box.current).setView([30.0444, 31.2357], 11);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-      st.current = { map, L, marker: null };
-      const place = (ll) => {
-        const s = st.current;
-        if (s.marker) s.marker.setLatLng(ll);
-        else
-          s.marker = s.L.circleMarker(ll, {
-            radius: 9,
-            color: "#ffffff",
-            weight: 2,
-            fillColor: "#22d3ee",
-            fillOpacity: 1,
-          }).addTo(s.map);
-      };
-      if (init.current) {
-        const p = init.current.split(",").map(Number);
-        if (p.length === 2 && p.every(Number.isFinite)) {
-          place(L.latLng(p[0], p[1]));
-          map.setView([p[0], p[1]], 16);
-        }
-      }
-      map.on("click", (e) => {
-        place(e.latlng);
-        pick.current(e.latlng.lat.toFixed(6) + "," + e.latlng.lng.toFixed(6));
-      });
-    })();
-    return () => {
-      dead = true;
-      if (st.current.map) st.current.map.remove();
-      st.current = {};
-    };
-  }, []);
-
-  useEffect(() => {
-    const s = st.current;
-    if (!value && s.marker) {
-      s.marker.remove();
-      s.marker = null;
-    }
-  }, [value]);
-
-  return (
-    <div
-      ref={box}
-      style={{
-        height: 260,
-        borderRadius: 8,
-        border: "1px solid var(--border)",
-        position: "relative",
-        zIndex: 0,
-        isolation: "isolate",
-      }}
-    />
-  );
+  return <MapBox initial={value} value={value} onPick={onPick} height={260} />;
 }
 
 function StopPicker({ disabled, stops, mode, value, onList, onMap }) {
@@ -201,9 +132,9 @@ export default function Join() {
     const t = e.target;
     if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA") return;
     e.preventDefault();
-    if (t.closest(".mlist")) return;
+    if (t.closest(".mlist") || t.closest(".msr")) return;
     const els = Array.from(e.currentTarget.querySelectorAll("input, select, button.cp")).filter(
-      (x) => !x.disabled && !x.closest(".mlist")
+      (x) => !x.disabled && !x.closest(".mlist") && !x.closest(".msr")
     );
     const i = els.indexOf(t);
     if (i === -1) return;
@@ -275,7 +206,7 @@ export default function Join() {
 
   return (
     <main className="rt" style={{ maxWidth: 480 }}>
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
       <h2 style={{ textAlign: "center", margin: "0 0 8px" }}>Join your company</h2>
       <form
         noValidate

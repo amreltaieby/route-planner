@@ -60,27 +60,23 @@ function build(r, gMin) {
   return { factor: f, startMs, order, driveMin: gMin, totalMin: totalSec / 60 };
 }
 
-function Row({ v, set, ph, saved, onDel, showPeople }) {
+function Row({ v, set, saved, onDel, showPeople }) {
   const [open, setOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [q, setQ] = useState("");
   const shown = saved.filter((l) =>
     l.name.toLowerCase().includes(q.trim().toLowerCase())
   );
+
   return (
     <>
-      <div className="row">
+      <div className="row" style={{ flexWrap: "wrap" }}>
         <input
           className="in nm"
+          style={{ minWidth: 140 }}
           placeholder="Name of location"
           value={v.name}
           onChange={(e) => set({ ...v, name: e.target.value })}
-        />
-        <input
-          className="in lc"
-          placeholder={ph}
-          value={v.loc}
-          onChange={(e) => set({ ...v, loc: e.target.value })}
         />
         {showPeople && (
           <input
@@ -104,14 +100,14 @@ function Row({ v, set, ph, saved, onDel, showPeople }) {
         <div className="hb">
           <button
             type="button"
-            className="mn"
+            className="ghost"
+            style={{ marginTop: 0, height: "100%", whiteSpace: "nowrap" }}
             onClick={() => {
               setQ("");
               setOpen(!open);
             }}
-            aria-label="Saved locations"
           >
-            {"\u2630"}
+            My locations
           </button>
           {open && (
             <>
@@ -166,6 +162,11 @@ function Row({ v, set, ph, saved, onDel, showPeople }) {
           <span className="xb" />
         )}
       </div>
+      {v.loc && (
+        <div className="muted" style={{ margin: "-4px 0 8px 2px", fontSize: 12 }}>
+          {v.loc}
+        </div>
+      )}
       {mapOpen && (
         <MapPicker
           initial={v.loc}
@@ -259,7 +260,7 @@ function Result({ res }) {
     }
   }
 
-  const fuelL = res.kp > 0 ? res.distanceKm / res.kp : null;
+  const fuelL = res.l100 > 0 ? (res.distanceKm * res.l100) / 100 : null;
   const fuelCost = fuelL !== null && res.price > 0 ? fuelL * res.price : null;
 
   return (
@@ -431,12 +432,11 @@ export default function Home() {
   const [end2, setEnd2] = useState({ name: "", loc: "" });
   const [stops, setStops] = useState(() => [blank()]);
   const [locs, setLocs] = useState([]);
+  const [fuel, setFuel] = useState({ l100: 0, price: 0 });
   const [cars, setCars] = useState("1");
   const [capacity, setCapacity] = useState("");
   const [arrival, setArrival] = useState("");
   const [stopMin, setStopMin] = useState(5);
-  const [kmpl, setKmpl] = useState("");
-  const [fuelPrice, setFuelPrice] = useState("");
   const [results, setResults] = useState([]);
   const [runId, setRunId] = useState(0);
   const [err, setErr] = useState("");
@@ -459,6 +459,12 @@ export default function Home() {
     async function init() {
       const l = await supabase.from("locations").select("id,name,coords").order("name");
       setLocs(l.data || []);
+      const co = await supabase.from("companies").select("fuel_l100,fuel_price").maybeSingle();
+      if (co.data)
+        setFuel({
+          l100: Number(co.data.fuel_l100) || 0,
+          price: Number(co.data.fuel_price) || 0,
+        });
       const p = new URLSearchParams(window.location.search);
       if (p.get("prefill")) {
         try {
@@ -563,8 +569,8 @@ export default function Home() {
             },
             arrivalMs: when.getTime(),
             stopMs: sm * 60000,
-            kp: Number(kmpl) || 0,
-            price: Number(fuelPrice) || 0,
+            l100: fuel.l100,
+            price: fuel.price,
           };
         });
         setRunId((x) => x + 1);
@@ -578,7 +584,7 @@ export default function Home() {
 
   return (
     <main className="rt">
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
 
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
@@ -607,18 +613,18 @@ export default function Home() {
       </div>
 
       <label>Start location of car 1</label>
-      <Row v={start} set={setStart} ph="Coordinates (lat,lng)" saved={locs} />
+      <Row v={start} set={setStart} saved={locs} />
 
       <label>End location of car 1</label>
-      <Row v={end} set={setEnd} ph="Coordinates (lat,lng)" saved={locs} />
+      <Row v={end} set={setEnd} saved={locs} />
 
       {two && (
         <>
           <label>Start location of car 2</label>
-          <Row v={start2} set={setStart2} ph="Coordinates (lat,lng)" saved={locs} />
+          <Row v={start2} set={setStart2} saved={locs} />
 
           <label>End location of car 2</label>
-          <Row v={end2} set={setEnd2} ph="Coordinates (lat,lng)" saved={locs} />
+          <Row v={end2} set={setEnd2} saved={locs} />
         </>
       )}
 
@@ -628,7 +634,6 @@ export default function Home() {
           key={s.id}
           v={s}
           set={(v) => setStop(i, v)}
-          ph="Coordinates (lat,lng)"
           saved={locs}
           onDel={() => delStop(i)}
           showPeople={Number(capacity) > 0}
@@ -643,12 +648,6 @@ export default function Home() {
 
       <label>Stop time per stop (min)</label>
       <input className="in" type="number" min="0" value={stopMin} onChange={nn(setStopMin)} />
-
-      <label>Combined km per liter (optional)</label>
-      <input className="in" type="number" min="0" placeholder="Optional" value={kmpl} onChange={nn(setKmpl)} />
-
-      <label>Fuel price per liter (optional)</label>
-      <input className="in" type="number" min="0" step="0.01" placeholder="Optional" value={fuelPrice} onChange={nn(setFuelPrice)} />
 
       <button className="btn" onClick={go} disabled={busy}>
         {busy ? "Planning..." : "Plan route"}

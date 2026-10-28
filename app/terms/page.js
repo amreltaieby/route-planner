@@ -29,20 +29,20 @@ export default function Terms() {
       </button>
 
       <h1>Terms of Service and Privacy Policy</h1>
-      <p className="muted">Routiq. Last updated: {UPDATED}</p>
+      <p className="muted">RouteIQ. Last updated: {UPDATED}</p>
       <p>
-        These documents are an agreement between you and {OP} ("we", "us", "Routiq"). By creating an
-        account or using Routiq you accept both parts below. If you do not accept them, do not use
-        Routiq.
+        These documents are an agreement between you and {OP} ("we", "us", "RouteIQ"). By creating an
+        account or using RouteIQ you accept both parts below. If you do not accept them, do not use
+        RouteIQ.
       </p>
 
       <h2>Part A. Terms of Service</h2>
 
       <Sec n="1" t="The service">
         <p>
-          Routiq is a web application that helps a business plan multi-stop driving routes. You enter
-          locations, clients, trips and schedules, and Routiq suggests a stop order and estimated
-          times, distances and fuel figures. Routiq does not provide transport services, does not
+          RouteIQ is a web application that helps a business plan multi-stop driving routes. You enter
+          locations, clients, trips and schedules, and RouteIQ suggests a stop order and estimated
+          times, distances and fuel figures. RouteIQ does not provide transport services, does not
           employ drivers, and is not a party to any arrangement between you and your clients or
           drivers.
         </p>
@@ -66,7 +66,7 @@ export default function Terms() {
       <Sec n="3" t="Acceptable use">
         <p>You agree not to:</p>
         <ul>
-          <li>use Routiq for anything unlawful, or to harm, harass, track or stalk any person;</li>
+          <li>use RouteIQ for anything unlawful, or to harm, harass, track or stalk any person;</li>
           <li>upload data you have no right to use, including personal data collected without a lawful basis;</li>
           <li>attempt to access another company's data, probe or bypass security, or overload the service;</li>
           <li>copy, resell, sublicense, reverse engineer or scrape the service, except as the law allows;</li>
@@ -78,7 +78,7 @@ export default function Terms() {
       <Sec n="4" t="Your data and your responsibilities">
         <ul>
           <li>
-            You own the data you put into Routiq ("Customer Data"), including locations, client
+            You own the data you put into RouteIQ ("Customer Data"), including locations, client
             details, trips and schedules. You give us a limited licence to host, process and display it
             only to provide and secure the service.
           </li>
@@ -111,7 +111,7 @@ export default function Terms() {
             before relying on it.
           </li>
           <li>
-            Drivers must obey traffic law and use their own judgment. Routiq is not a navigation or
+            Drivers must obey traffic law and use their own judgment. RouteIQ is not a navigation or
             emergency system and must not be used where life or safety depends on its output.
           </li>
           <li>
@@ -123,7 +123,7 @@ export default function Terms() {
 
       <Sec n="6" t="Third-party services">
         <p>
-          Routiq relies on third parties, including hosting and database providers, open map data and
+          RouteIQ relies on third parties, including hosting and database providers, open map data and
           public routing and geocoding services, and links that open Google Maps. Those services have
           their own terms and may change, limit or stop working without notice. We are not liable for
           their performance. Map data is derived from OpenStreetMap contributors.
@@ -140,7 +140,7 @@ export default function Terms() {
 
       <Sec n="8" t="Intellectual property">
         <p>
-          Routiq, its software, design and branding belong to {OP} or its licensors. You receive a
+          RouteIQ, its software, design and branding belong to {OP} or its licensors. You receive a
           limited, non-exclusive, non-transferable right to use the service during your subscription
           or licence for your own business. No other rights are granted. If you send feedback, we may
           use it freely without obligation to you.
@@ -157,7 +157,7 @@ export default function Terms() {
 
       <Sec n="10" t="Disclaimer of warranties">
         <p>
-          To the fullest extent permitted by law, Routiq is provided "as is" and "as available".
+          To the fullest extent permitted by law, RouteIQ is provided "as is" and "as available".
           We disclaim all warranties, express or implied, including merchantability, fitness for a
           particular purpose, accuracy, and non-infringement.
         </p>
@@ -192,7 +192,7 @@ export default function Terms() {
 
       <Sec n="13" t="Suspension and termination">
         <p>
-          You may stop using Routiq and ask us to close your account at any time. We may suspend or
+          You may stop using RouteIQ and ask us to close your account at any time. We may suspend or
           end your access if you breach these terms, create risk or legal exposure for us or others,
           or fail to pay. On closure we will delete or anonymize Customer Data under Part B, subject to
           legal retention duties. Sections that by nature should survive (including 4, 8, 10 to 12 and
@@ -284,7 +284,7 @@ export default function Terms() {
       <Sec n="5" t="Sharing">
         <p>
           We do not sell personal data. We share it only with service providers that help us run
-          Routiq (hosting, database, routing and geocoding, security and support) under appropriate
+          RouteIQ (hosting, database, routing and geocoding, security and support) under appropriate
           terms, with authorities when the law requires, and in a business transfer with the same
           protections. Each company's data is kept separate from other companies' data.
         </p>
@@ -327,9 +327,9 @@ export default function Terms() {
 
       <Sec n="10" t="Children">
         <p>
-          Routiq is for businesses and is not directed to children. Companies may enter details of
+          RouteIQ is for businesses and is not directed to children. Companies may enter details of
           minors they transport and must hold a parent or guardian's consent to do so. If you believe a
-          child has used Routiq directly, contact us and we will act.
+          child has used RouteIQ directly, contact us and we will act.
         </p>
       </Sec>
 
@@ -345,6 +345,13 @@ export default function Terms() {
           {OP}. Email: {EMAIL}. Questions about these documents or your data can be sent there.
         </p>
       </Sec>
+
+      <p className="muted" style={{ marginTop: 40 }}>
+        New company?{" "}
+        <a className="maps" href="/signup">
+          Create an account
+        </a>
+      </p>
     </main>
   );
 }

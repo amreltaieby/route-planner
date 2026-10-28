@@ -12,6 +12,11 @@ export default function Settings() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [l100, setL100] = useState("");
+  const [price, setPrice] = useState("");
+  const [fmsg, setFmsg] = useState("");
+  const [ferr, setFerr] = useState("");
+  const [fsaving, setFsaving] = useState(false);
 
   useEffect(() => {
     try {
@@ -20,9 +25,15 @@ export default function Settings() {
     } catch {}
     supabase
       .from("companies")
-      .select("name,code")
+      .select("name,code,fuel_l100,fuel_price")
       .maybeSingle()
-      .then((r) => setCompany(r.data || null));
+      .then((r) => {
+        setCompany(r.data || null);
+        if (r.data) {
+          setL100(r.data.fuel_l100 != null ? String(r.data.fuel_l100) : "");
+          setPrice(r.data.fuel_price != null ? String(r.data.fuel_price) : "");
+        }
+      });
   }, []);
 
   function toggleTheme() {
@@ -42,6 +53,20 @@ export default function Settings() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {}
+  }
+
+  async function saveFuel() {
+    setFerr("");
+    setFmsg("");
+    const a = l100.trim() === "" ? null : Number(l100);
+    const b = price.trim() === "" ? null : Number(price);
+    if ((a !== null && !(a >= 0)) || (b !== null && !(b >= 0)))
+      return setFerr("Enter numbers of zero or more.");
+    setFsaving(true);
+    const r = await supabase.rpc("set_fuel_settings", { p_l100: a, p_price: b });
+    setFsaving(false);
+    if (r.error) return setFerr(r.error.message);
+    setFmsg("Saved. It applies to all trips.");
   }
 
   async function addEmployee() {
@@ -98,6 +123,38 @@ export default function Settings() {
           </button>
         </>
       )}
+
+      <div className="sec" style={{ marginTop: 36 }}>
+        Fuel
+      </div>
+      <p className="muted" style={{ margin: "0 0 4px" }}>
+        Saved once and used for fuel and cost on every trip.
+      </p>
+      <label>Fuel consumption (L/100km)</label>
+      <input
+        className="in"
+        type="number"
+        min="0"
+        step="0.1"
+        placeholder="Optional"
+        value={l100}
+        onChange={(e) => setL100(e.target.value)}
+      />
+      <label>Fuel price per liter</label>
+      <input
+        className="in"
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="Optional"
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+      />
+      <button className="btn" onClick={saveFuel} disabled={fsaving}>
+        {fsaving ? "Saving..." : "Save"}
+      </button>
+      {fmsg && <p className="muted">{fmsg}</p>}
+      {ferr && <p className="err">{ferr}</p>}
 
       <div className="sec" style={{ marginTop: 36 }}>
         Add employee

@@ -231,7 +231,7 @@ export default function ClientHome() {
 
   return (
     <main className="rt cl" dir={dir} style={{ maxWidth: 520 }}>
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
 
       {noSession && (
         <p className="muted" style={{ textAlign: "center" }}>

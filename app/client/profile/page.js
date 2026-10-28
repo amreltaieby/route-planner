@@ -106,7 +106,7 @@ export default function Profile() {
 
   return (
     <main className="rt cl" dir={dir} style={{ maxWidth: 520 }}>
-      <h1 className="brandh">Routiq</h1>
+      <h1 className="brandh">RouteIQ</h1>
 
       {me && (
         <>

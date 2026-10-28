@@ -72,12 +72,6 @@ export default function Login() {
         </p>
       )}
       <p className="muted" style={{ marginTop: 22 }}>
-        New company?{" "}
-        <Link className="maps" href="/signup">
-          Create an account
-        </Link>
-      </p>
-      <p className="muted">
         Client?{" "}
         <Link className="maps" href="/join">
           Join your company
